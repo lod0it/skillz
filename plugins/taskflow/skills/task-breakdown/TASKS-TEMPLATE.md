@@ -4,8 +4,8 @@ One file per task under `tasks/`, one folder per stage. The task files are the s
 
 ## Task system
 
-- **Tool:** `python3 ~/.claude/skills/task-breakdown/tasks.py` (`status`, `next`, `check`, `move <id> <stage>`, `set <id> <field> <value>`, `checks`, `next-id`, `index`)
-- **Inbox:** `note.md` (raw ideas, any language, kept out of git; sorted with `/task-breakdown notes`)
+- **Tool:** `taskflow` (`status`, `next`, `check`, `move <id> <stage>`, `set <id> <field> <value>`, `checks`, `next-id`, `index`)
+- **Inbox:** `note.md` (raw ideas, any language, kept out of git; sorted with `/taskflow:task-breakdown notes`)
 - **Loop:** —
 - **Test:** — (the command that runs the full suite; the Loop verifies every task with it)
 - **Who:** interactive, opus, sonnet
@@ -19,7 +19,7 @@ A task's folder says which kind of session it needs next. Only the Tool moves a 
 
 | Folder | Holds | Session it needs |
 |---|---|---|
-| `tasks/01_to-grill/` | ideas and tasks whose decisions are still open | grilling with the user (`/task-breakdown <id>`) |
+| `tasks/01_to-grill/` | ideas and tasks whose decisions are still open | grilling with the user (`/taskflow:task-breakdown <id>`) |
 | `tasks/02_design-gate/` | designs the user approves before any code | design, with the user |
 | `tasks/03_ready/` | code ready to implement | code |
 | `tasks/04_real-check/` | planned checks that spend real resources (tokens, hardware, accounts) | with the user, never unattended |
@@ -31,9 +31,9 @@ A task's folder says which kind of session it needs next. Only the Tool moves a 
 - **One task per fresh session:** read its file, implement it, close it.
 - **Before implementing a ready task by hand,** run `next`: when it reports several tasks fit for the Loop, propose the Loop first.
 - **Closing a task:** rewrite its `## Manual check` with what the user must try by hand (at most 5 steps: what to open, what to do, what they should see) plus what you could not verify, or the single line `Nothing to check by hand.` Then `move <id> to-be-tested` when there are steps, `move <id> done` when there are none. Commit locally if appropriate.
-- **The user's check:** `/task-breakdown checks` lists every pending Manual check. A check that passes closes the task (`move <id> done`); one that fails becomes a new `bug` task that names the old one, and the old one is closed with a `--note`.
+- **The user's check:** `/taskflow:task-breakdown checks` lists every pending Manual check. A check that passes closes the task (`move <id> done`); one that fails becomes a new `bug` task that names the old one, and the old one is closed with a `--note`.
 - **Cross-references use the id** ("Outcome of Task 12"), found with `tasks/*/12_*.md`: a path would break at the next move.
-- **New tasks, splits and inbox triage** go through `/task-breakdown`.
+- **New tasks, splits and inbox triage** go through `/taskflow:task-breakdown`.
 
 ## Task template
 

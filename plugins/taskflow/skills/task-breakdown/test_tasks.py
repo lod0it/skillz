@@ -16,7 +16,7 @@ TASKS_MD = """# Implementation tasks
 ## Task system
 
 - **Inbox:** `note.md` (raw ideas)
-- **Loop:** `/task-loop`
+- **Loop:** `/taskflow:task-loop`
 - **Who:** interactive, opus, sonnet
 - **Archived ids:** 1–9 (in `tasks/archive.md`)
 
@@ -294,12 +294,12 @@ class ReportsTest(BoardCase):
         self.assertIn("  you   13 ", out)
         self.assertIn("  14    waits for 10", out)
         self.assertIn("side by side in separate worktrees: [10, 12]  [11]", out)
-        self.assertIn("3 tasks fit /task-loop: propose it", out)
+        self.assertIn("3 tasks fit /taskflow:task-loop: propose it", out)
         self.assertIn("1 tasks wait for the user's manual check", out)
 
     def test_next_says_nothing_about_the_loop_for_a_single_task(self):
         self.add("ready", "10_a.md")
-        self.assertNotIn("/task-loop", self.run_cmd("next")[1])
+        self.assertNotIn("/taskflow:task-loop", self.run_cmd("next")[1])
 
     def test_dependency_on_a_to_be_tested_task_is_satisfied(self):
         self.add("to-be-tested", "9_t.md", mark="[~]", manual="1. Open Home.")
@@ -328,3 +328,41 @@ class ReportsTest(BoardCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MigrateToolTest(BoardCase):
+    OLD = "- **Tool:** `python3 ~/.claude/skills/task-breakdown/tasks.py`\nRun /task-loop, see /task-breakdown notes, ~/.claude/skills/task-breakdown/x\n"
+
+    def setUp(self):
+        super().setUp()
+        profile = self.root / ".claude" / "agents" / "implementer.md"
+        profile.parent.mkdir(parents=True)
+        profile.write_text(self.OLD, encoding="utf-8")
+        self.profile = profile
+
+    def test_check_flags_the_old_tool(self):
+        code, out = self.check()
+        self.assertEqual(code, 1)
+        self.assertIn("OLD-TOOL .claude/agents/implementer.md", out)
+
+    def test_migrate_rewrites_tool_and_commands_only(self):
+        code, out = self.run_cmd("migrate-tool")
+        self.assertEqual(code, 0)
+        text = self.profile.read_text(encoding="utf-8")
+        self.assertIn("`taskflow`", text)
+        self.assertIn("/taskflow:task-loop", text)
+        self.assertIn("/taskflow:task-breakdown notes", text)
+        self.assertIn("~/.claude/skills/task-breakdown/x", text)
+        self.assertEqual(self.check()[0], 0)
+
+    def test_migrate_is_idempotent(self):
+        self.run_cmd("migrate-tool")
+        self.assertIn("nothing to migrate", self.run_cmd("migrate-tool")[1])
+
+
+class PluginVersionTest(unittest.TestCase):
+    def test_version_file_matches_the_manifest(self):
+        import json
+        plugin = Path(__file__).resolve().parents[2]
+        manifest = json.loads((plugin / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual((plugin / "VERSION").read_text(encoding="utf-8").strip(), manifest["version"])

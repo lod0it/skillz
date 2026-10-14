@@ -1,0 +1,12 @@
+{
+  "name": "skillz",
+  "owner": { "name": "Giuseppe Alfano" },
+  "description": "Giuseppe Alfano's Claude Code skills and plugins.",
+  "plugins": [
+    {
+      "name": "taskflow",
+      "source": "./plugins/taskflow",
+      "description": "task-breakdown + task-loop: staged tasks/ pipeline and a one-subagent-per-task runner."
+    }
+  ]
+}

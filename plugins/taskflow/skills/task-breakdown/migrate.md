@@ -43,3 +43,11 @@ Wait for the user's yes.
 
 Done when `check` prints `0 errors` and no file in the repo names a folder
 that no longer exists. Leave committing to the user.
+
+## An `OLD-TOOL` error instead
+
+`check` prints `OLD-TOOL` when `TASKS.md` or `.claude/agents/implementer.md`
+still names the pre-plugin Tool (`python3 ~/.claude/skills/task-breakdown/tasks.py`)
+or the un-namespaced commands (`/task-breakdown`, `/task-loop`). That is not a
+layout migration: run `migrate-tool` (zero tokens, no proposal needed), then
+`check`. Tell the user which files changed; leave committing to them.

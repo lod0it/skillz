@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements one task file of this repo from tasks/03_ready end to end and closes it. Dispatched by /task-loop with the task id and file.
+description: Implements one task file of this repo from tasks/03_ready end to end and closes it. Dispatched by /taskflow:task-loop with the task id and file.
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 
@@ -18,7 +18,7 @@ Do every step of the task and meet its acceptance criteria. Steps marked "tell t
 
 ## Close
 
-The Tool is `python3 ~/.claude/skills/task-breakdown/tasks.py`. It alone changes a task's folder, its Status line and the index in `TASKS.md`.
+The Tool is `taskflow`. It alone changes a task's folder, its Status line and the index in `TASKS.md`.
 
 1. Rewrite the task's `## Manual check`: what the user must try by hand (at most 5 steps: what to open, what to do, what they should see) plus what you could not verify, or the single line `Nothing to check by hand.` Write its `## Outcome`.
 2. Steps for the user, or steps of yours left pending → `tasks.py move <id> to-be-tested --note "<what is pending>"`. Nothing left for anyone → `tasks.py move <id> done`.

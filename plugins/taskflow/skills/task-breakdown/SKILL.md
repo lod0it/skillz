@@ -1,8 +1,8 @@
 ---
 name: task-breakdown
-description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /task-breakdown, asks to plan, grill or split a task, to sort their notes into tasks, or to go through the pending manual checks.
+description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /taskflow:task-breakdown, asks to plan, grill or split a task, to sort their notes into tasks, or to go through the pending manual checks.
 argument-hint: "[plan-doc path | task id | notes | checks]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(python3 ${CLAUDE_SKILL_DIR}/tasks.py *)
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(taskflow *)
 ---
 
 This skill runs inline in the current session — deliberately **not**
@@ -13,10 +13,10 @@ grilling needs the user's answers in this conversation. Everything mechanical
 which costs zero tokens:
 
 ```
-python3 ${CLAUDE_SKILL_DIR}/tasks.py <command>
+taskflow <command>
 ```
 
-`check` · `init` · `status` · `next` · `next-id` · `move <id> <stage> [--note TEXT] [--rejected]` ·
+`check` · `migrate-tool` · `init` · `status` · `next` · `next-id` · `move <id> <stage> [--note TEXT] [--rejected]` ·
 `set <id> <field> <value>` · `checks` · `adopt <path> <stage>` · `index`
 
 The task files are the single source of truth: a task's stage is the folder
@@ -35,6 +35,9 @@ Run `check` and act on what it prints:
   cannot tell you.
 - **`LEGACY` lines, or a `TASKS.md` that holds task bodies** → follow
   [migrate.md](migrate.md) before any branch.
+- **`OLD-TOOL` lines** → run `migrate-tool`, tell the user which files it
+  changed, then `check` again. The full migration of [migrate.md](migrate.md)
+  is not needed.
 - **Any other error** → fix the mechanical ones (`index`, `move <id> <its
   stage>`, a header field with `set`) and report the rest to the user.
 

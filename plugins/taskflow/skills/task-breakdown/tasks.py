@@ -329,6 +329,30 @@ def write_index(board):
         (done_dir / DONE_INDEX).write_text(render_done_index(board), encoding="utf-8")
 
 
+# --- old Tool path ---------------------------------------------------------
+# Before the plugin, the Tool was `python3 ~/.claude/skills/task-breakdown/tasks.py`
+# and the skills were `/task-breakdown`, `/task-loop`.
+
+OLD_TOOL = "python3 ~/.claude/skills/task-breakdown/tasks.py"
+OLD_COMMAND_RE = re.compile(r"(?<![\w./~:-])/task-(breakdown|loop)\b")
+MIGRATABLE = ("TASKS.md", ".claude/agents/implementer.md")
+
+
+def migrate_text(text):
+    return OLD_COMMAND_RE.sub(r"/taskflow:task-\1", text.replace(OLD_TOOL, "taskflow"))
+
+
+def old_tool_files(board):
+    out = []
+    for name in MIGRATABLE:
+        path = board.root / name
+        if path.is_file():
+            text = path.read_text(encoding="utf-8")
+            if migrate_text(text) != text:
+                out.append(path)
+    return out
+
+
 # --- check -----------------------------------------------------------------
 
 def check(board):
@@ -345,6 +369,9 @@ def check(board):
             errors.append(f"LEGACY tasks/{entry.name}/ ({count} task files) is not a pipeline folder")
         elif entry.is_file() and entry.name not in KEPT_IN_TASKS_ROOT:
             errors.append(f"LEGACY tasks/{entry.name} sits outside the pipeline folders")
+
+    for path in old_tool_files(board):
+        errors.append(f"OLD-TOOL {board.rel(path)} names the pre-plugin Tool or commands (run `migrate-tool`)")
 
     types = board.config_list("types", DEFAULT_TYPES)
     who_values = board.config_list("who")
@@ -497,6 +524,16 @@ def cmd_check(board, args):
     return 1 if errors else 0
 
 
+def cmd_migrate_tool(board, args):
+    files = old_tool_files(board)
+    for path in files:
+        path.write_text(migrate_text(path.read_text(encoding="utf-8")), encoding="utf-8")
+        print(f"updated {board.rel(path)}")
+    if not files:
+        print("nothing to migrate")
+    return 0
+
+
 def cmd_index(board, args):
     write_index(board)
     print(f"index written: {len(board.open)} open, {len(board.closed)} closed")
@@ -637,6 +674,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="create the pipeline folders and, if missing, TASKS.md").set_defaults(run=cmd_init)
     sub.add_parser("check", help="report every inconsistency; exit 1 on errors").set_defaults(run=cmd_check)
+    sub.add_parser("migrate-tool", help="rewrite the pre-plugin Tool path and slash commands in TASKS.md and the implementer profile").set_defaults(run=cmd_migrate_tool)
     sub.add_parser("index", help="regenerate the index in TASKS.md and 99_done/INDEX.md").set_defaults(run=cmd_index)
     sub.add_parser("status", help="count the tasks in each stage").set_defaults(run=cmd_status)
     sub.add_parser("next", help="ready tasks: unblocked, loopable, disjoint").set_defaults(run=cmd_next)
