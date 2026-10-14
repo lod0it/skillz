@@ -1,7 +1,7 @@
 {
   "name": "skillz",
   "owner": { "name": "Giuseppe Alfano" },
-  "description": "Giuseppe Alfano's Claude Code skills and plugins.",
+  "description": "Daily workflows in Claude Code, skills and plugins, to live a better life.",
   "plugins": [
     {
       "name": "taskflow",
