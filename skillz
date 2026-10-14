@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""skillz - install / uninstall the skillz skills, plugins and context overrides.
+
+  ./skillz status
+  ./skillz install   [--skills LIST] [--plugins LIST] [--overrides | --no-overrides]
+  ./skillz uninstall [--skills LIST] [--plugins LIST] [--overrides | --no-overrides]
+
+LIST is "all", "none" or comma-separated names. Any selector left out is asked
+interactively when stdin is a terminal, otherwise it defaults to none.
+
+What it manages:
+  skills     standalone skills (top-level <name>/SKILL.md) symlinked into
+             ~/.claude/skills/, so they load in every project
+  plugins    bundles in plugins/, installed through the local `skillz`
+             marketplace with `claude plugin install <name>@skillz --scope S`
+  overrides  skill-overrides.json merged into `skillOverrides` of
+             ~/.claude/settings.json (keeps skill descriptions out of the
+             model's context; /name still works)
+
+Everything changed is recorded in ~/.claude/skillz-state.json so uninstall
+reverts exactly that (overrides go back to their previous value, backed-up
+conflicting skills are restored). Standard library only.
+"""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent
+CLAUDE_DIR = Path.home() / ".claude"
+SKILLS_DIR = CLAUDE_DIR / "skills"
+SETTINGS = CLAUDE_DIR / "settings.json"
+STATE = CLAUDE_DIR / "skillz-state.json"
+MARKETPLACE = "skillz"
+SCOPES = ("user", "project", "local")
+
+
+# ---------- helpers ----------
+
+def die(msg):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_json(path, default):
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        return default
+    except json.JSONDecodeError as e:
+        die(f"{path} is not valid JSON ({e})")
+
+
+def save_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def load_state():
+    s = load_json(STATE, {})
+    for k in ("skills", "plugins", "overrides"):
+        s.setdefault(k, {})
+    s.setdefault("marketplace_added", False)
+    return s
+
+
+def save_state(state):
+    empty = not (state["skills"] or state["plugins"] or state["overrides"]
+                 or state["marketplace_added"])
+    if empty:
+        STATE.unlink(missing_ok=True)
+    else:
+        save_json(STATE, state)
+
+
+def claude(*args):
+    if not shutil.which("claude"):
+        die("`claude` CLI not found in PATH (needed for plugins)")
+    return subprocess.run(["claude", *args], capture_output=True, text=True)
+
+
+def claude_or_die(*args):
+    r = claude(*args)
+    if r.returncode != 0:
+        die(f"`claude {' '.join(args)}` failed: {(r.stderr or r.stdout).strip()}")
+
+
+# ---------- discovery ----------
+
+def standalone_skills():
+    return sorted(d.name for d in REPO.iterdir() if (d / "SKILL.md").is_file())
+
+
+def plugins():
+    out = {}
+    for pj in sorted((REPO / "plugins").glob("*/.claude-plugin/plugin.json")):
+        d = pj.parent.parent
+        out[d.name] = sorted(s.name for s in (d / "skills").iterdir()
+                             if (s / "SKILL.md").is_file())
+    return out
+
+
+def override_map():
+    return load_json(REPO / "skill-overrides.json", {})
+
+
+def synced_names():
+    names = set()
+    for m in (SKILLS_DIR / "synced").glob("*/manifest.json"):
+        for s in load_json(m, {}).get("skills", []):
+            names.add(s.get("name"))
+    return names
+
+
+def marketplace_registered():
+    r = claude("plugin", "marketplace", "list")
+    return r.returncode == 0 and MARKETPLACE in r.stdout
+
+
+def installed_plugins():
+    r = claude("plugin", "list", "--json")
+    raw = r.stdout if r.returncode == 0 else ""
+    return {p for p in plugins() if f"{p}@{MARKETPLACE}" in raw}
+
+
+# ---------- links ----------
+
+def points_to_repo(path, src):
+    return os.path.lexists(path) and os.path.realpath(path) == os.path.realpath(src)
+
+
+def make_link(src, dst):
+    if os.name == "nt":  # junction: no admin / Developer Mode needed
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(dst), str(src)],
+                       check=True, capture_output=True)
+    else:
+        os.symlink(src, dst)
+
+
+def remove_link(path):
+    if os.name == "nt":
+        os.rmdir(path)
+    else:
+        os.unlink(path)
+
+
+def skill_status(name):
+    """installed | free | conflict"""
+    dst = SKILLS_DIR / name
+    if points_to_repo(dst, REPO / name):
+        return "installed"
+    return "conflict" if os.path.lexists(dst) else "free"
+
+
+# ---------- selection ----------
+
+def choose(label, items, arg):
+    """items: {name: annotation}. arg: None | 'all' | 'none' | 'a,b'."""
+    if arg is not None:
+        if arg == "all":
+            return list(items)
+        if arg == "none":
+            return []
+        sel = [a for a in arg.split(",") if a]
+        bad = [a for a in sel if a not in items]
+        if bad:
+            die(f"unknown {label}: {', '.join(bad)} (available: {', '.join(items) or 'none'})")
+        return sel
+    if not items or not sys.stdin.isatty():
+        return []
+    names = list(items)
+    print(f"\n{label}:")
+    for i, n in enumerate(names, 1):
+        note = f"  {items[n]}" if items[n] else ""
+        print(f"  {i:2}. {n}{note}")
+    ans = input("Select numbers/names (comma separated), 'a' = all, Enter = none: ").strip()
+    if not ans:
+        return []
+    if ans.lower() in ("a", "all"):
+        return names
+    sel = []
+    for tok in (t.strip() for t in ans.split(",") if t.strip()):
+        if tok.isdigit() and 1 <= int(tok) <= len(names):
+            sel.append(names[int(tok) - 1])
+        elif tok in items:
+            sel.append(tok)
+        else:
+            die(f"invalid selection: {tok}")
+    return sel
+
+
+def ask_yes_no(question, default=False):
+    if not sys.stdin.isatty():
+        return default
+    ans = input(f"{question} [{'Y/n' if default else 'y/N'}] ").strip().lower()
+    return default if not ans else ans in ("y", "yes", "s", "si", "sì")
+
+
+def pick_scope(a, default):
+    if a.plugin_scope:
+        return a.plugin_scope
+    if not sys.stdin.isatty():
+        return default
+    print("\nPlugin scope: user = enabled in every project; "
+          "project/local = only in the current directory's project.")
+    ans = input(f"Scope ({'/'.join(SCOPES)}) [{default}]: ").strip()
+    if ans and ans not in SCOPES:
+        die(f"invalid scope: {ans}")
+    return ans or default
+
+
+def run_plan(plan, a):
+    """plan: list of (description, callable). Print, confirm, execute."""
+    if not plan:
+        print("\nNothing to do.")
+        return False
+    print("\nPlan:")
+    for desc, _ in plan:
+        print(f"  - {desc}")
+    if a.dry_run:
+        print("\n(dry run: no changes made)")
+        return False
+    if not a.yes and sys.stdin.isatty() and not ask_yes_no("\nProceed?", True):
+        print("Aborted.")
+        return False
+    for _, fn in plan:
+        fn()
+    return True
+
+
+# ---------- status ----------
+
+def cmd_status(_a):
+    state = load_state()
+    synced = synced_names()
+    print("Skills (global, ~/.claude/skills):")
+    for n in standalone_skills():
+        st = skill_status(n)
+        extra = ""
+        if st == "conflict":
+            extra = f" -> {os.path.realpath(SKILLS_DIR / n)}"
+        if n in synced:
+            extra += "  (name also used by an account-synced skill)"
+        print(f"  {n:24} {st}{extra}")
+    print("\nPlugins:")
+    inst = installed_plugins() if shutil.which("claude") else set()
+    for p, skills in plugins().items():
+        scope = state["plugins"].get(p)
+        flag = "installed" + (f" ({scope})" if scope else "") if p in inst else "not installed"
+        print(f"  {p:24} {flag}  [{', '.join(skills)}]")
+    cur = load_json(SETTINGS, {}).get("skillOverrides", {})
+    want = override_map()
+    print("\nOverrides (skill-overrides.json vs settings.json):")
+    for k, v in want.items():
+        have = cur.get(k)
+        st = "applied" if have == v else ("missing" if have is None else f"different ({have})")
+        print(f"  {k:24} {st}")
+
+
+# ---------- install ----------
+
+def cmd_install(a):
+    state = load_state()
+    synced = synced_names()
+    plan = []
+
+    # skills
+    items = {}
+    for n in standalone_skills():
+        st = skill_status(n)
+        note = {"installed": "[already installed]",
+                "free": "",
+                "conflict": f"[CONFLICT: {SKILLS_DIR / n} already exists]"}[st]
+        if n in synced:
+            note += " [same name as an account-synced skill]"
+        items[n] = note.strip()
+    for n in choose("Global skills", items, a.skills):
+        st = skill_status(n)
+        if st == "installed":
+            print(f"skip   {n}: already installed")
+            continue
+        if n in synced:
+            print(f"warn   {n}: an account-synced skill has the same name")
+        dst, src = SKILLS_DIR / n, REPO / n
+        if st == "conflict" and not a.force:
+            print(f"skip   {n}: {dst} already exists (use --force to back it up and replace)")
+            continue
+        plan.append((
+            f"link skill {n}" + (" (existing one is backed up)" if st == "conflict" else ""),
+            lambda n=n, src=src, dst=dst, st=st: install_skill(state, n, src, dst, st)))
+
+    # plugins
+    pl = plugins()
+    inst = installed_plugins() if shutil.which("claude") else set()
+    items = {p: ("[already installed]" if p in inst else "") + (f" skills: {', '.join(s)}" if s else "")
+             for p, s in pl.items()}
+    selected = choose("Plugins", items, a.plugins)
+    for p in selected:
+        if p in inst:
+            print(f"skip   plugin {p}: already installed")
+    chosen = [p for p in selected if p not in inst]
+    if chosen:
+        scope = pick_scope(a, "project")
+        for p in chosen:
+            for s in pl[p]:
+                if os.path.lexists(SKILLS_DIR / s):
+                    print(f"note   plugin {p}: skill '{s}' also exists globally "
+                          "(plugin skills are namespaced, so both work)")
+        if not marketplace_registered():
+            plan.append((f"register marketplace '{MARKETPLACE}' ({REPO})",
+                         lambda: add_marketplace(state)))
+        for p in chosen:
+            plan.append((f"install plugin {p}@{MARKETPLACE} (scope {scope})",
+                         lambda p=p, scope=scope: install_plugin(state, p, scope)))
+
+    # overrides
+    want = override_map()
+    do_ov = a.overrides
+    if do_ov is None:
+        do_ov = ask_yes_no(f"\nApply {len(want)} skill overrides to shrink model context?", False)
+    if do_ov:
+        cur = load_json(SETTINGS, {}).get("skillOverrides", {})
+        todo = {}
+        for k, v in want.items():
+            if k not in cur:
+                todo[k] = v
+            elif cur[k] == v:
+                pass
+            elif a.force:
+                todo[k] = v
+            else:
+                print(f"skip   override {k}: already set to '{cur[k]}' (use --force to replace)")
+        if todo:
+            plan.append((f"set {len(todo)} skillOverrides in {SETTINGS}",
+                         lambda: install_overrides(state, todo)))
+        else:
+            print("skip   overrides: nothing to change")
+
+    if run_plan(plan, a):
+        print("\nDone. Enable plugins per project with scope 'project'/'local', "
+              "or check with ./skillz status.")
+
+
+def install_skill(state, name, src, dst, st):
+    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    backup = None
+    if st == "conflict":
+        backup = f"{dst}.bak-{time.strftime('%Y%m%d%H%M%S')}"
+        os.rename(dst, backup)
+    make_link(src, dst)
+    state["skills"][name] = {"backup": backup}
+    save_state(state)
+    print(f"linked {name}" + (f" (old one -> {Path(backup).name})" if backup else ""))
+
+
+def add_marketplace(state):
+    claude_or_die("plugin", "marketplace", "add", str(REPO))
+    state["marketplace_added"] = True
+    save_state(state)
+    print(f"registered marketplace {MARKETPLACE}")
+
+
+def install_plugin(state, name, scope):
+    claude_or_die("plugin", "install", f"{name}@{MARKETPLACE}", "--scope", scope)
+    state["plugins"][name] = scope
+    save_state(state)
+    print(f"installed plugin {name} (scope {scope})")
+
+
+def install_overrides(state, todo):
+    settings = load_json(SETTINGS, {})
+    cur = settings.setdefault("skillOverrides", {})
+    for k, v in todo.items():
+        # keep the earliest recorded previous value if we set this key before
+        prev = state["overrides"].get(k, {}).get("prev", cur.get(k))
+        state["overrides"][k] = {"set": v, "prev": prev}
+        cur[k] = v
+    save_json(SETTINGS, settings)
+    save_state(state)
+    print(f"set {len(todo)} overrides")
+
+
+# ---------- uninstall ----------
+
+def cmd_uninstall(a):
+    state = load_state()
+    plan = []
+
+    # skills
+    items = {n: "" for n in standalone_skills() if skill_status(n) == "installed"}
+    for n in choose("Installed global skills", items, a.skills):
+        if n not in items:
+            print(f"skip   {n}: not installed by this repo")
+            continue
+        plan.append((f"unlink skill {n}" + (" and restore its backup"
+                     if state["skills"].get(n, {}).get("backup") else ""),
+                     lambda n=n: uninstall_skill(state, n)))
+
+    # plugins
+    inst = installed_plugins() if shutil.which("claude") else set()
+    cand = sorted(inst | set(state["plugins"]))
+    items = {p: f"[scope {state['plugins'].get(p, '?')}]" for p in cand}
+    chosen = choose("Installed plugins", items, a.plugins)
+    for p in chosen:
+        scope = a.plugin_scope or state["plugins"].get(p) or "user"
+        plan.append((f"uninstall plugin {p}@{MARKETPLACE} (scope {scope})",
+                     lambda p=p, scope=scope: uninstall_plugin(state, p, scope)))
+    if a.remove_marketplace or (chosen and not (set(cand) - set(chosen))
+                                and marketplace_registered()
+                                and ask_yes_no(f"\nAlso remove marketplace '{MARKETPLACE}'?", False)):
+        plan.append((f"remove marketplace '{MARKETPLACE}'", lambda: remove_marketplace(state)))
+
+    # overrides
+    do_ov = a.overrides
+    if do_ov is None:
+        do_ov = bool(state["overrides"]) and ask_yes_no(
+            f"\nRevert {len(state['overrides'])} skill overrides set by skillz?", False)
+    if do_ov:
+        if state["overrides"]:
+            plan.append((f"revert {len(state['overrides'])} skillOverrides in {SETTINGS}",
+                         lambda: uninstall_overrides(state)))
+        else:
+            print("skip   overrides: none recorded in state (nothing set by skillz)")
+
+    if run_plan(plan, a):
+        print("\nDone.")
+
+
+def uninstall_skill(state, name):
+    remove_link(SKILLS_DIR / name)
+    backup = state["skills"].pop(name, {}).get("backup")
+    if backup and os.path.lexists(backup):
+        os.rename(backup, SKILLS_DIR / name)
+        print(f"unlinked {name}, restored {Path(backup).name}")
+    else:
+        print(f"unlinked {name}")
+    save_state(state)
+
+
+def uninstall_plugin(state, name, scope):
+    claude_or_die("plugin", "uninstall", f"{name}@{MARKETPLACE}", "--scope", scope)
+    state["plugins"].pop(name, None)
+    save_state(state)
+    print(f"uninstalled plugin {name}")
+
+
+def remove_marketplace(state):
+    claude_or_die("plugin", "marketplace", "remove", MARKETPLACE)
+    state["marketplace_added"] = False
+    save_state(state)
+    print(f"removed marketplace {MARKETPLACE}")
+
+
+def uninstall_overrides(state):
+    settings = load_json(SETTINGS, {})
+    cur = settings.get("skillOverrides", {})
+    for k, rec in list(state["overrides"].items()):
+        if cur.get(k) != rec["set"]:
+            print(f"keep   override {k}: changed since install ({cur.get(k)}), left as is")
+        elif rec["prev"] is None:
+            del cur[k]
+        else:
+            cur[k] = rec["prev"]
+        del state["overrides"][k]
+    if not cur:
+        settings.pop("skillOverrides", None)
+    save_json(SETTINGS, settings)
+    save_state(state)
+    print("reverted overrides")
+
+
+# ---------- main ----------
+
+def main():
+    ap = argparse.ArgumentParser(prog="skillz", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("status", help="show what is installed and any conflicts")
+    for name, fn, verb in (("install", cmd_install, "install"),
+                           ("uninstall", cmd_uninstall, "uninstall / revert")):
+        p = sub.add_parser(name, help=f"{verb} skills, plugins, overrides")
+        p.add_argument("--skills", metavar="LIST", help="all | none | a,b (global skills)")
+        p.add_argument("--plugins", metavar="LIST", help="all | none | a,b")
+        g = p.add_mutually_exclusive_group()
+        g.add_argument("--overrides", dest="overrides", action="store_true", default=None)
+        g.add_argument("--no-overrides", dest="overrides", action="store_false")
+        p.add_argument("--plugin-scope", choices=SCOPES,
+                       help="scope for plugin (un)install (install default: project)")
+        p.add_argument("--force", action="store_true",
+                       help="install: back up conflicting skills / replace differing overrides")
+        p.add_argument("-y", "--yes", action="store_true", help="skip the confirmation")
+        p.add_argument("--dry-run", action="store_true", help="show the plan only")
+        if name == "uninstall":
+            p.add_argument("--remove-marketplace", action="store_true")
+        p.set_defaults(fn=fn)
+    a = ap.parse_args()
+    (cmd_status if a.cmd == "status" else a.fn)(a)
+
+
+if __name__ == "__main__":
+    main()
