@@ -6,7 +6,7 @@
     {
       "name": "taskflow",
       "source": "./plugins/taskflow",
-      "description": "task-breakdown + task-loop: staged tasks/ pipeline and a one-subagent-per-task runner."
+      "description": "task-breakdown + task-loop + now-what: staged tasks/ pipeline, a one-subagent-per-task runner and a read-only what-next analysis."
     }
   ]
 }
