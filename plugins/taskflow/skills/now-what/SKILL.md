@@ -18,7 +18,7 @@ Run `taskflow check`, `taskflow status`, `taskflow next`, `taskflow checks`. If 
 
 ## 2. What each task unlocks
 
-For every task in `01_to-grill`, `02_design-gate`, `03_ready` and `04_real-check`, read its header only (`Depends on`, `Who`, `Files`, first lines) with Grep or a short Read. Build the reverse view: for each task that is not done, which blocked tasks does it release? Rank the unblockers by how much they release, directly and through the chain. Tasks on the same `Files` in the same chain run in series, never side by side.
+For every task in `01_to-grill`, `02_design-gate`, `03_ready` and `04_real-check`, read its header only (`Depends on`, `Who`, `Files`, first lines) with Grep or a short Read. Tasks in `00_backlog` are on hold: do not analyse or rank them, only add one line "N in backlog" (and flag a ready task that depends on one). Build the reverse view: for each task that is not done, which blocked tasks does it release? Rank the unblockers by how much they release, directly and through the chain. Tasks on the same `Files` in the same chain run in series, never side by side.
 
 ## 3. Open grills against ready work
 
@@ -40,4 +40,4 @@ Short, in this order. No tables over 6 rows; no restating the task files.
 4. **Recommended flow** — numbered, 3 to 6 steps, mixing the Loop (background, fresh contexts) with what the user does here. Name the single bottleneck (usually a design gate or a real check) and what it blocks.
 5. **Open question** — only if a decision of the user's changes the order. Otherwise omit.
 
-End by offering the next concrete action (for example "start the Loop on 41a", "grill 35 and 36"). Never start it yourself.
+End by offering the next concrete action (for example "start the Loop on 41a", "grill 35 and 36"). When several loopable tasks have disjoint `Files`, offer them as one command, `/taskflow:task-loop <ids>`: the Loop then runs them in parallel worktrees, commits the pipeline state first and merges the finished `done` tasks back by itself. Never start it yourself.

@@ -1,6 +1,6 @@
 ---
 name: task-breakdown
-description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /taskflow:task-breakdown, asks to plan, grill or split a task, to sort their notes into tasks, or to go through the pending manual checks.
+description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (backlog, to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /taskflow:task-breakdown, asks to plan, grill or split a task, to sort their notes into tasks, or to go through the pending manual checks.
 argument-hint: "[plan-doc path | task id | notes | checks]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(taskflow *)
 ---

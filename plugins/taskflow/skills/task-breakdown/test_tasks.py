@@ -67,6 +67,27 @@ class BoardCase(unittest.TestCase):
         return (self.root / "TASKS.md").read_text(encoding="utf-8")
 
 
+class BacklogTest(BoardCase):
+    def test_backlog_is_the_first_folder_and_hold_is_an_alias(self):
+        self.assertEqual(tasks.STAGES[0].folder, "00_backlog")
+        self.assertIs(tasks.resolve_stage("hold"), tasks.STAGES[0])
+
+    def test_backlog_task_is_out_of_next_and_listed_last_in_the_index(self):
+        self.add("backlog", "12_later.md", files="—")
+        self.assertEqual(self.run_cmd("index")[0], 0)
+        code, out = self.run_cmd("next")
+        self.assertNotIn("12", out)
+        text = self.index()
+        self.assertGreater(text.index("Backlog (1)"), text.index("To be tested"))
+
+    def test_ready_task_depending_on_backlog_warns_and_waits(self):
+        self.add("backlog", "12_later.md", files="—")
+        self.add("ready", "13_now.md", depends="Task 12", files="`a.py`")
+        code, out = self.check()
+        self.assertIn("in the backlog", out)
+        self.assertIn("waits for 12", self.run_cmd("next")[1])
+
+
 class InitTest(BoardCase):
     def test_creates_every_stage_folder_with_gitkeep(self):
         for stage in tasks.STAGES:
@@ -175,7 +196,7 @@ class IndexTest(BoardCase):
         self.add("done", "8_closed.md", mark="[x]", status="done")
         self.run_cmd("index")
         text = self.index()
-        self.assertIn("Open: 3 (to grill 0 · design gate 0 · ready 2 · real check 0 · to be tested 1). Closed: 1", text)
+        self.assertIn("Open: 3 (to grill 0 · design gate 0 · ready 2 · real check 0 · to be tested 1 · backlog 0). Closed: 1", text)
         self.assertIn("| 10 First \\| piped | `tasks/03_ready/10_first.md` | not started | — | feature | opus |", text)
         self.assertIn("| 11 A task | `tasks/03_ready/11_second.md` | not started | 10 | feature | opus |", text)
         self.assertNotIn("8_closed", text)

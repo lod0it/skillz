@@ -11,6 +11,7 @@ or the conversation are in.
 
 | The task needs | Folder |
 |---|---|
+| nothing yet: the user put it on hold, out of the Loop (only the user decides this; `move <id> backlog`, any stage in and out) | `00_backlog` |
 | a decision only the user can make | `01_to-grill` |
 | a design the user approves before code (only when Task system declares a Design gate) | `02_design-gate` |
 | nothing but implementing | `03_ready` |
