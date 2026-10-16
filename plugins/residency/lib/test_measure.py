@@ -77,7 +77,7 @@ class T(unittest.TestCase):
         d = self.m(f).delta(DENY)
         self.assertFalse(d.ok)
         self.assertIn("unknown", d.reason)
-        self.assertFalse(self.cache.exists())
+        self.assertEqual(len(json.loads(self.cache.read_text())), 1)  # the base only
 
     def test_cache_hit_and_invalidation(self):
         f = Fake({"{}": [out(md("30k"))], DENYJ: [out(md("28.8k"))]})
@@ -92,7 +92,30 @@ class T(unittest.TestCase):
         d2 = self.m(f2).delta(DENY)
         self.assertFalse(d2.cached)
         self.assertEqual(d2.total, 1000)
-        self.assertEqual(len(json.loads(self.cache.read_text())), 1)
+        self.assertEqual(len(json.loads(self.cache.read_text())), 2)  # base + delta
+
+    def test_cached_lookups_never_run(self):
+        f = Fake({"{}": [out(md("30k"))], DENYJ: [out(md("28.8k"))]})
+        m = self.m(f)
+        self.assertIsNone(m.cached(DENY))
+        self.assertIsNone(m.cached_base())
+        self.assertEqual(f.runs(), [])
+        m.delta(DENY)
+        m2 = self.m(f)
+        n = len(f.runs())
+        self.assertEqual(m2.cached(DENY).total, 1200)
+        self.assertEqual(m2.cached_base().categories["System tools"], 20000)
+        self.assertEqual(m2.base().total, 30000)  # from the cache
+        self.assertEqual(len(f.runs()), n)
+
+    def test_background_base_job(self):
+        f = Fake({"{}": [out(md("30k"))]})
+        got = []
+        b = M.Background(self.m(f), lambda n, r: got.append((n, r)))
+        b.submit("base", None)
+        b.close()
+        b.join(5)
+        self.assertEqual(got[0][1].total, 30000)
 
     def test_cost_refused(self):
         f = Fake({"{}": [out(md("30k"), cost=0.01, turns=1)]})

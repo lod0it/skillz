@@ -16,6 +16,7 @@ import snapshot
 
 UNTOUCHED = ("MCP server instructions", "Memory files")  # a toggle cannot change these
 TIMEOUT = 60
+BASE = {"__base__": True}  # cache key of the headless base itself
 
 
 class MeasureError(Exception):
@@ -81,7 +82,7 @@ class Measurer:
         self.untouched = untouched
         self._version = None
         self._base = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     # cache
     def _key(self, change):
@@ -108,11 +109,36 @@ class Measurer:
         except OSError:
             pass
 
+    def cached(self, change):
+        """The cached Delta of `change`, None when not cached; never runs a measure
+        (only `claude --version`, which may raise MeasureError)."""
+        hit = self._load().get(self._key(change))
+        if not isinstance(hit, dict) or "total" not in hit:
+            return None
+        return Delta(True, hit["total"], dict(hit.get("categories") or {}), cached=True)
+
+    def cached_base(self):
+        """The headless base from memory or cache (Snapshot with total and categories),
+        None when it was never measured; never runs `/context`."""
+        if self._base is not None:
+            return self._base
+        hit = self._load().get(self._key(BASE))
+        if not isinstance(hit, dict) or "total" not in hit:
+            return None
+        self._base = snapshot.Snapshot(total=hit["total"],
+                                       categories=dict(hit.get("categories") or {}))
+        return self._base
+
     # measure
     def base(self, refresh=False):
-        if self._base is None or refresh:
-            self._base = run_context({}, self.project_dir, self.runner)
-        return self._base
+        with self._lock:
+            if not refresh and self._base is None:
+                self.cached_base()
+            if self._base is None or refresh:
+                self._base = run_context({}, self.project_dir, self.runner)
+                self._store(self._key(BASE), Delta(True, self._base.total,
+                                                   dict(self._base.categories)))
+            return self._base
 
     def _valid(self, base, snap):
         return all(base.categories.get(c) == snap.categories.get(c) for c in self.untouched)
@@ -139,7 +165,11 @@ class Measurer:
 
 
 class Background:
-    """Measures many changes in a thread; `callback(name, result)` gets a Delta or a MeasureError."""
+    """Measures many changes in a thread; `callback(name, result)` gets a Delta or a MeasureError.
+
+    A job submitted with `change=None` measures the headless base: the callback gets the
+    base Snapshot.
+    """
 
     def __init__(self, measurer, callback):
         self.measurer, self.callback = measurer, callback
@@ -170,7 +200,7 @@ class Background:
                 return
             name, change = job
             try:
-                res = self.measurer.delta(change)
+                res = self.measurer.base() if change is None else self.measurer.delta(change)
             except MeasureError as e:
                 res = e
             self.callback(name, res)
