@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -456,6 +457,20 @@ class BoardTest(BoardCase):
 
     def test_empty_board(self):
         self.assertIn("Nothing active.", self.board())
+
+    def test_interactive_needs_a_terminal(self):
+        err = io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO()), contextlib.redirect_stderr(err):
+            code, _ = self.run_cmd("board", "-i")
+        self.assertEqual(code, 2)
+        self.assertIn("board -i needs a terminal: run it outside Claude Code", err.getvalue())
+
+    def test_interactive_from_the_shell_without_a_tty(self):
+        script = Path(tasks.__file__).resolve()
+        done = subprocess.run([sys.executable, str(script), "--root", str(self.root), "board", "-i"],
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("needs a terminal", done.stderr)
 
     def test_colour_only_when_asked_for(self):
         self.chain()

@@ -798,6 +798,13 @@ def render_board(board, width, color):
 
 
 def cmd_board(board, args):
+    if args.interactive:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            print("board -i needs a terminal: run it outside Claude Code", file=sys.stderr)
+            return 2
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import board_tui  # curses stays out of every other command
+        return board_tui.run(board.root)
     width = args.width or shutil.get_terminal_size((100, 24)).columns
     width = min(max(width, BOARD_WIDTH[0]), BOARD_WIDTH[1])
     color = not args.plain and sys.stdout.isatty() and not os.environ.get("NO_COLOR")
@@ -884,6 +891,8 @@ def main(argv=None):
     p = sub.add_parser("board", help="the active tasks as waves: what moves now, who blocks what, what each releases")
     p.add_argument("--plain", action="store_true", help="no colours (also when piped or NO_COLOR is set)")
     p.add_argument("--width", type=int, help="columns to fit (default: the terminal width)")
+    p.add_argument("-i", "--interactive", action="store_true",
+                   help="navigable board in a terminal: arrows, edit, move, Loop (not inside Claude Code)")
     p.set_defaults(run=cmd_board)
     sub.add_parser("checks", help="print every pending Manual check").set_defaults(run=cmd_checks)
     sub.add_parser("next-id", help="print the next free task number").set_defaults(run=cmd_next_id)

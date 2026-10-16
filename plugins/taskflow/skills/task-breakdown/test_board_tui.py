@@ -175,5 +175,75 @@ class WatcherTest(TuiCase):
         self.assertNotIn("curses", vars(bt))
 
 
+class ScreenHelpersTest(TuiCase):
+    def test_cells_paint_the_same_text_as_the_static_board(self):
+        self.chain()
+        v = self.view()
+        for t in v.tasks:
+            plain = tasks.board_cell(v, t, 34, tasks.Painter(False))
+            spans = bt.cell_lines(v, t, 34)
+            self.assertEqual([str(s) for s in spans], plain)
+            self.assertTrue(all(len(s) == 34 for s in spans))
+        first = bt.cell_lines(v, v.board.open_by_id["10"], 34)[0].pieces
+        self.assertEqual(first[0], ("●", "loop"))
+        self.assertIn((" ▶2", "unlock"), first)
+        self.assertTrue(all(style in (None, *tasks.ANSI) for line in [first] for _, style in line))
+
+    def test_cell_mode_dims_only_around_a_chain(self):
+        self.chain()
+        v = self.view()
+        port, printer, limits = (v.board.open_by_id[i] for i in ("10", "12", "14"))
+        chain = bt.highlight(v, port)
+        self.assertEqual(bt.cell_mode(port, port, chain), "cursor")
+        self.assertEqual(bt.cell_mode(v.board.open_by_id["13"], port, chain), "bright")
+        self.assertEqual(bt.cell_mode(printer, port, chain), "dim")
+        self.assertEqual(bt.cell_mode(port, limits, bt.highlight(v, limits)), "normal")
+
+    def test_follow_and_fit(self):
+        self.assertEqual(bt.follow(0, 3, 5, 10), 0)
+        self.assertEqual(bt.follow(0, 7, 5, 10), 3)
+        self.assertEqual(bt.follow(3, 1, 5, 10), 1)
+        self.assertEqual(bt.follow(8, 9, 5, 6), 1)
+        self.assertEqual(bt.fit_columns(0, 100), (0, 0))
+        self.assertEqual(bt.fit_columns(3, 200), (3, tasks.COLUMN[1]))
+        shown, cell = bt.fit_columns(5, 80)
+        self.assertEqual(shown, 2)
+        self.assertGreaterEqual(cell, tasks.COLUMN[0])
+        self.assertLessEqual(shown * (cell + bt.GUTTER) + len(bt.SEP) * (shown - 1), 80)
+
+    def test_header(self):
+        self.chain()
+        b = tasks.Board(self.root)
+        title, summary, warning = bt.header(b, tasks.BoardView(b), 0)
+        self.assertEqual(title, "taskflow board")
+        self.assertIn("6 active · 1 backlog", summary)
+        self.assertEqual(warning, "")
+        self.assertIn("2 errors", bt.header(b, tasks.BoardView(b), 2)[2])
+
+    def test_taskflow_runs_through_this_tasks_py(self):
+        self.chain()
+        argv = bt.runnable(["taskflow", "move", "10", "done"], self.root)
+        self.assertEqual(argv[:4], [sys.executable, str(Path(tasks.__file__).resolve()), "--root", str(self.root)])
+        self.assertEqual(bt.runnable(["vi", "x"], self.root), ["vi", "x"])
+        b = tasks.Board(self.root)
+        [command] = bt.move_commands([b.open_by_id["14"]], "backlog", "later")
+        code, out = bt.execute(command, self.root)
+        self.assertEqual(code, 0)
+        self.assertIn("Task 14:", out)
+        self.assertEqual(tasks.Board(self.root).open_by_id["14"].stage.name, "backlog")
+        self.assertEqual(bt.execute(bt.Command(["/no/such/tool"]), self.root)[0], 127)
+
+    def test_raw_arrows(self):
+        self.assertEqual(bt.raw_arrow(["[", "B"]), "DOWN")
+        self.assertEqual(bt.raw_arrow(["O", "D"]), "LEFT")
+        self.assertIsNone(bt.raw_arrow([]))
+        self.assertIsNone(bt.raw_arrow(["m"]))
+
+    def test_editor_may_carry_flags(self):
+        self.chain()
+        t = self.view().board.open_by_id["10"]
+        self.assertEqual(bt.edit_command(t, {"EDITOR": "code -w"}).argv, ["code", "-w", str(t.path)])
+
+
 if __name__ == "__main__":
     unittest.main()
