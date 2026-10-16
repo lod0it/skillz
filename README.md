@@ -49,12 +49,21 @@ Deltas come from headless `claude -p "/context"` runs, which cost 0 tokens and w
 
 **Refresh for free.** The totals come from the last interactive `/context` in the project's transcripts. After a write the screen says the snapshot is stale: run `claude`, type `/context`, then `/exit`. Neither command reaches the model, so it costs 0 tokens; `residency` then shows the new totals and `last change  predicted … actual … error …`.
 
+### `refine`
+
+Code-improvement skills and the `refine` command that backs them (`plugins/refine/bin/`, on the Bash tool's `PATH` while the plugin is enabled). Only `python3` (stdlib) is needed. `refine --version` prints the version; `refine golden`, `refine measure` and `refine coverage` are routed to modules that later tasks add, and say `not implemented yet` (exit 2) until then.
+
+| Skill | Command | Description |
+|---|---|---|
+| `ablate` | planned | Ablative simplification: remove code while behaviour stays the same. Design in `docs/ablate-design.md`. |
+
 ## Install
 
 ```
 /plugin marketplace add lod0it/skillz
 /plugin install taskflow@skillz
 /plugin install residency@skillz
+/plugin install refine@skillz
 ```
 
 Update with `/plugin update taskflow@skillz`. On every release bump `plugins/taskflow/VERSION` and `version` in `plugins/taskflow/.claude-plugin/plugin.json` together (a test fails when they differ): the manifest version pins what users get.
