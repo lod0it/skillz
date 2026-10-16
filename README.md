@@ -59,7 +59,7 @@ Code-improvement skills and the `refine` command that backs them (`plugins/refin
 
 | Skill | Command | Description |
 |---|---|---|
-| `ablate` | planned | Ablative simplification: remove code while behaviour stays the same. Design in `docs/ablate-design.md`. |
+| `ablate` | `/refine:ablate <script>` (explicit only) | Ablative simplification of one file: removes one logical block at a time and keeps the cut only if behaviour is unchanged. The oracle is the existing tests, else a golden output of cases you approve, else static reasoning. Lines the oracle does not cover are left alone; with no coverage tool (and no local install) only coverage-independent cuts are tried. The public interface stays frozen except for symbols you approve. The three approvals are asked once, up front. Each kept cut is a commit on `ablate/<stem>-<date>`, squashed at the end, never merged. The report gives lines/tokens before→after, the mode, accepted and rejected cuts, unverifiable lines and suggestions. Design in `docs/ablate-design.md`. |
 
 ## Install
 

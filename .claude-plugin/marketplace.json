@@ -16,7 +16,7 @@
     {
       "name": "refine",
       "source": "./plugins/refine",
-      "description": "refine command and code-improvement skills (ablate planned): golden outputs, measures and coverage maps."
+      "description": "Code-improvement skills (/refine:ablate: ablative simplification of one script) and the refine command behind them: golden outputs, measures and coverage maps."
     }
   ]
 }
