@@ -51,7 +51,11 @@ Deltas come from headless `claude -p "/context"` runs, which cost 0 tokens and w
 
 ### `refine`
 
-Code-improvement skills and the `refine` command that backs them (`plugins/refine/bin/`, on the Bash tool's `PATH` while the plugin is enabled). Only `python3` (stdlib) is needed. `refine --version` prints the version; `refine golden`, `refine measure` and `refine coverage` are routed to modules that later tasks add, and say `not implemented yet` (exit 2) until then.
+Code-improvement skills and the `refine` command that backs them (`plugins/refine/bin/`, on the Bash tool's `PATH` while the plugin is enabled). Only `python3` (stdlib) is needed. `refine --version` prints the version.
+
+- `refine golden record|verify <cases.json> <dir> [--timeout S]` records a script's stdout, stderr, exit code and produced files for a list of cases (each run twice; unstable cases are reported, not stored), then reruns them and prints `OK` or a compact diff per failing case (exit 1). The `cases.json` format is in `refine golden --help`.
+- `refine measure <file> [--time <cases.json>]` prints code lines, total lines and lexical tokens as JSON; `--time` adds the median wall time of the cases over 5 runs.
+- `refine coverage` is not implemented yet (exit 2).
 
 | Skill | Command | Description |
 |---|---|---|
