@@ -22,7 +22,32 @@ The plugin also ships the `taskflow` command (`plugins/taskflow/bin/`, on the Ba
 
 ### `residency`
 
-A terminal command to see and trim what Claude Code keeps resident in context. It ships no skills, so it adds 0 resident tokens, and it does its work without calling the model. `./skillz install --plugins residency` links it into `~/.local/bin`, so `residency` runs from any terminal (`residency --version`; the tool itself is still a stub). `./skillz uninstall` removes the link.
+A terminal command to see and trim what Claude Code keeps resident in context. It ships no skills, so it adds 0 resident tokens, and it does its work without calling the model. `./skillz install --plugins residency` links it into `~/.local/bin`, so `residency` runs from any terminal. `./skillz uninstall` removes the link.
+
+Run it in a separate terminal or tmux pane, from inside a project:
+
+```sh
+residency                  # curses screen for the project of the current directory
+residency --plain          # the same content printed once (also used when piped)
+residency --project DIR    # another project
+```
+
+The screen shows the resident total of the latest `/context` (NOW), the total after the changes you toggle (AFTER) as stacked bars (core, skills, mcp, memory/CLAUDE.md), and a tree of categories and items. Each number carries its origin: `=` measured, `~` estimated, `?` unknown. Items show their state, the scope it comes from (`U` user, `P` project, `L` local; on a toggled item, the scope `w` writes to) and how often they were used, here and in all projects.
+
+| Key | Action |
+|---|---|
+| `↑` `↓` | move (also `j` `k`, PgUp/PgDn, Home/End) |
+| `⏎` | expand or collapse a category |
+| `space` | next state of the item (skills: on, name-only, user-invocable-only, off; tools and MCP: deny; plugins: off); its delta is measured in the background |
+| `s` | scope the item is written to (user, project, local) |
+| `o` | sort by cost or by cost × unused |
+| `w` | show the diff of the settings files, confirm, back each file up as `<file>.bak-<time>`, write, record the prediction |
+| `M` | measure every item in the background |
+| `q` | quit (asks first when toggles are not written) |
+
+Deltas come from headless `claude -p "/context"` runs, which cost 0 tokens and write no transcript; they are cached in `~/.claude/residency-cache.json`. Plugin skills cannot be switched one by one: toggle their plugin.
+
+**Refresh for free.** The totals come from the last interactive `/context` in the project's transcripts. After a write the screen says the snapshot is stale: run `claude`, type `/context`, then `/exit`. Neither command reaches the model, so it costs 0 tokens; `residency` then shows the new totals and `last change  predicted … actual … error …`.
 
 ## Install
 
