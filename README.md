@@ -55,7 +55,7 @@ Code-improvement skills and the `refine` command that backs them (`plugins/refin
 
 - `refine golden record|verify <cases.json> <dir> [--timeout S]` records a script's stdout, stderr, exit code and produced files for a list of cases (each run twice; unstable cases are reported, not stored), then reruns them and prints `OK` or a compact diff per failing case (exit 1). The `cases.json` format is in `refine golden --help`.
 - `refine measure <file> [--time <cases.json>]` prints code lines, total lines and lexical tokens as JSON; `--time` adds the median wall time of the cases over 5 runs.
-- `refine coverage` is not implemented yet (exit 2).
+- `refine coverage <script> <cases.json> [--scratch DIR] [--python PY]` runs the cases under the script's language coverage tool (Python: coverage.py; shell: `bash -x`; JS/TS: c8; Go: `go test -coverprofile`) and prints JSON with the script's covered line numbers (`mode: measured`). With no usable tool it prints `mode: unavailable` with an `install_hint` that installs into `--scratch` (a venv or `npm --prefix`, never global) and exits 3. `refine coverage --probe <script>` only reports language, tool and availability.
 
 | Skill | Command | Description |
 |---|---|---|
