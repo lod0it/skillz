@@ -37,6 +37,9 @@ SETTINGS = CLAUDE_DIR / "settings.json"
 STATE = CLAUDE_DIR / "skillz-state.json"
 MARKETPLACE = "skillz"
 SCOPES = ("user", "project", "local")
+BIN_DIR = Path.home() / ".local" / "bin"
+# plugin -> command linked into BIN_DIR (target: the stable repo path)
+COMMANDS = {"residency": "plugins/residency/bin/residency"}
 
 
 # ---------- helpers ----------
@@ -62,7 +65,7 @@ def save_json(path, data):
 
 def load_state():
     s = load_json(STATE, {})
-    for k in ("skills", "plugins", "overrides"):
+    for k in ("skills", "plugins", "overrides", "links"):
         s.setdefault(k, {})
     s.setdefault("marketplace_added", False)
     return s
@@ -70,7 +73,7 @@ def load_state():
 
 def save_state(state):
     empty = not (state["skills"] or state["plugins"] or state["overrides"]
-                 or state["marketplace_added"])
+                 or state["links"] or state["marketplace_added"])
     if empty:
         STATE.unlink(missing_ok=True)
     else:
@@ -99,8 +102,9 @@ def plugins():
     out = {}
     for pj in sorted((REPO / "plugins").glob("*/.claude-plugin/plugin.json")):
         d = pj.parent.parent
-        out[d.name] = sorted(s.name for s in (d / "skills").iterdir()
-                             if (s / "SKILL.md").is_file())
+        sk = d / "skills"
+        out[d.name] = sorted(s.name for s in sk.iterdir()
+                             if (s / "SKILL.md").is_file()) if sk.is_dir() else []
     return out
 
 
@@ -154,6 +158,20 @@ def skill_status(name):
     if points_to_repo(dst, REPO / name):
         return "installed"
     return "conflict" if os.path.lexists(dst) else "free"
+
+
+def command_status(plugin):
+    """linked | free | conflict | None (plugin has no command)"""
+    if plugin not in COMMANDS:
+        return None
+    dst = BIN_DIR / plugin
+    if os.path.islink(dst) and os.path.realpath(dst) == os.path.realpath(REPO / COMMANDS[plugin]):
+        return "linked"
+    return "conflict" if os.path.lexists(dst) else "free"
+
+
+def on_path(d):
+    return str(d) in os.environ.get("PATH", "").split(os.pathsep)
 
 
 # ---------- selection ----------
@@ -252,6 +270,9 @@ def cmd_status(_a):
         scope = state["plugins"].get(p)
         flag = "installed" + (f" ({scope})" if scope else "") if p in inst else "not installed"
         print(f"  {p:24} {flag}  [{', '.join(skills)}]")
+        cs = command_status(p)
+        if cs:
+            print(f"    command {BIN_DIR / p}: {cs}")
     cur = load_json(SETTINGS, {}).get("skillOverrides", {})
     want = override_map()
     print("\nOverrides (skill-overrides.json vs settings.json):")
@@ -317,6 +338,17 @@ def cmd_install(a):
             plan.append((f"install plugin {p}@{MARKETPLACE} (scope {scope})",
                          lambda p=p, scope=scope: install_plugin(state, p, scope)))
 
+    for p in selected:
+        cs = command_status(p)
+        if cs == "linked":
+            print(f"skip   command {p}: already linked")
+        elif cs == "conflict":
+            print(f"skip   command {p}: {BIN_DIR / p} exists and is not our symlink "
+                  "(left untouched)")
+        elif cs == "free":
+            plan.append((f"link command {BIN_DIR / p} -> {REPO / COMMANDS[p]}",
+                         lambda p=p: install_command(state, p)))
+
     # overrides
     want = override_map()
     do_ov = a.overrides
@@ -371,6 +403,16 @@ def install_plugin(state, name, scope):
     print(f"installed plugin {name} (scope {scope})")
 
 
+def install_command(state, name):
+    BIN_DIR.mkdir(parents=True, exist_ok=True)
+    os.symlink(REPO / COMMANDS[name], BIN_DIR / name)
+    state["links"][name] = str(BIN_DIR / name)
+    save_state(state)
+    print(f"linked command {BIN_DIR / name}")
+    if not on_path(BIN_DIR):
+        print(f"warn   {BIN_DIR} is not on $PATH: add it to your shell profile")
+
+
 def install_overrides(state, todo):
     settings = load_json(SETTINGS, {})
     cur = settings.setdefault("skillOverrides", {})
@@ -409,6 +451,12 @@ def cmd_uninstall(a):
         scope = a.plugin_scope or state["plugins"].get(p) or "user"
         plan.append((f"uninstall plugin {p}@{MARKETPLACE} (scope {scope})",
                      lambda p=p, scope=scope: uninstall_plugin(state, p, scope)))
+    for p in chosen:
+        if p in state["links"] and command_status(p) == "linked":
+            plan.append((f"remove command link {state['links'][p]}",
+                         lambda p=p: uninstall_command(state, p)))
+        elif p in state["links"]:
+            print(f"skip   command {p}: {state['links'][p]} is no longer our symlink")
     if a.remove_marketplace or (chosen and not (set(cand) - set(chosen))
                                 and marketplace_registered()
                                 and ask_yes_no(f"\nAlso remove marketplace '{MARKETPLACE}'?", False)):
@@ -439,6 +487,12 @@ def uninstall_skill(state, name):
     else:
         print(f"unlinked {name}")
     save_state(state)
+
+
+def uninstall_command(state, name):
+    os.unlink(state["links"].pop(name))
+    save_state(state)
+    print(f"removed command link for {name}")
 
 
 def uninstall_plugin(state, name, scope):

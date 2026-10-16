@@ -20,11 +20,16 @@ The plugin also ships the `taskflow` command (`plugins/taskflow/bin/`, on the Ba
 
 `taskflow board -i` is the same board, interactive: run it in a separate terminal or tmux pane, not inside Claude Code (the Bash tool has no keyboard; without a terminal it exits with code 2). `↑↓←→` move between tasks and waves (held tasks are the last column, `HELD`); the selected task's chain is highlighted and the rest dimmed, and a box under the board shows its Who, Files, what it waits for and what it releases. `⏎` opens the task file in `$EDITOR` (default `vi`); `m` moves the task (or the selection) to a stage through `taskflow move`, with an optional Status note; `space` selects several tasks, `esc` clears the selection; `l` launches the Loop on them; `q` quits. The board reloads by itself when files under `tasks/` change, so a running Loop shows live. Tip: inside tmux, `l` opens a new window running `claude "/taskflow:task-loop <ids>"`; outside tmux it copies that command with `pbcopy` for you to paste.
 
+### `residency`
+
+A terminal command to see and trim what Claude Code keeps resident in context. It ships no skills, so it adds 0 resident tokens, and it does its work without calling the model. `./skillz install --plugins residency` links it into `~/.local/bin`, so `residency` runs from any terminal (`residency --version`; the tool itself is still a stub). `./skillz uninstall` removes the link.
+
 ## Install
 
 ```
 /plugin marketplace add lod0it/skillz
 /plugin install taskflow@skillz
+/plugin install residency@skillz
 ```
 
 Update with `/plugin update taskflow@skillz`. On every release bump `plugins/taskflow/VERSION` and `version` in `plugins/taskflow/.claude-plugin/plugin.json` together (a test fails when they differ): the manifest version pins what users get.
@@ -39,6 +44,7 @@ A project set up before the plugin names the old Tool path: `taskflow migrate-to
 ./skillz status
 ./skillz install                      # interactive
 ./skillz install --plugins taskflow
+./skillz install --plugins residency   # also links ~/.local/bin/residency
 ./skillz uninstall
 ```
 

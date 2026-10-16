@@ -7,6 +7,11 @@
       "name": "taskflow",
       "source": "./plugins/taskflow",
       "description": "task-breakdown + task-loop + now-what: staged tasks/ pipeline, a one-subagent-per-task runner and a read-only what-next analysis."
+    },
+    {
+      "name": "residency",
+      "source": "./plugins/residency",
+      "description": "residency command: zero-token terminal tool to see and trim resident context. No skills."
     }
   ]
 }
