@@ -387,3 +387,77 @@ class PluginVersionTest(unittest.TestCase):
         plugin = Path(__file__).resolve().parents[2]
         manifest = json.loads((plugin / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
         self.assertEqual((plugin / "VERSION").read_text(encoding="utf-8").strip(), manifest["version"])
+
+
+class BoardTest(BoardCase):
+    def board(self, *extra):
+        code, out = self.run_cmd("board", "--plain", "--width", "120", *extra)
+        self.assertEqual(code, 0)
+        return out
+
+    def chain(self):
+        self.add("ready", "10_port.md", title="Port", files="`src/port.py`")
+        self.add("ready", "11_endpoint.md", title="Endpoint", depends="Task 10", files="`src/api.py`")
+        self.add("real-check", "12_printer.md", title="Printer", who="interactive", files="—")
+        self.add("ready", "13_print.md", title="Print", depends="Task 11, Task 12", files="`src/print.py`")
+        self.add("to-grill", "14_limits.md", title="Limits", files="—")
+        self.run_cmd("index")
+
+    def test_waves_follow_the_longest_chain(self):
+        self.chain()
+        view = tasks.BoardView(tasks.Board(self.root))
+        self.assertEqual([[t.id for t in w] for w in view.waves], [["10", "12", "14"], ["11"], ["13"]])
+        self.assertEqual([t.id for t in view.unlocks(view.board.open_by_id["10"])], ["11", "13"])
+
+    def test_columns_roles_and_footer(self):
+        self.chain()
+        out = self.board()
+        self.assertRegex(out.splitlines()[2], r"^NOW \(3\)\s+│ AFTER 1 \(1\)\s+│ AFTER 2 \(1\)$")
+        self.assertRegex(out, r"● 10 Port\s+▶2")
+        self.assertRegex(out, r"◆ 12 Printer\s+▶1")
+        self.assertIn("◇ 14 Limits", out)
+        self.assertIn("○ 13 Print", out)
+        self.assertIn("← 11, 12 · opus", out)
+        self.assertIn("Loop now:   /taskflow:task-loop 10\n", out)
+        self.assertIn("Needs you:  12 real check ▶1 · 14 grill\n", out)
+        self.assertIn("Bottleneck: 12 (real check) holds 13\n", out)
+        self.assertNotIn("\033[", out)
+
+    def test_narrow_terminal_stacks_the_waves(self):
+        self.chain()
+        out = self.run_cmd("board", "--plain", "--width", "60")[1]
+        self.assertIn("NOW (3)\n● 10 Port", out)
+        self.assertNotIn("│", out)
+
+    def test_loop_groups_split_on_shared_files(self):
+        self.add("ready", "10_a.md")
+        self.add("ready", "11_b.md")
+        self.add("ready", "12_c.md", files="`src/c.py`")
+        self.assertIn("/taskflow:task-loop 10 12  (then 11: same files)", self.board())
+
+    def test_backlog_and_missing_dependencies_hold_the_chain(self):
+        self.add("backlog", "12_later.md", files="—")
+        self.add("ready", "13_csv.md", title="CSV", depends="Task 12", files="`src/csv.py`")
+        self.add("ready", "14_mail.md", title="Mail", depends="Task 13", files="`src/mail.py`")
+        out = self.board()
+        self.assertIn("Held:       13 CSV ← 12 in backlog", out)
+        self.assertIn("Held:       14 Mail ← 13 held", out)
+        self.assertNotIn("NOW", out)
+
+    def test_to_be_tested_counts_as_done_and_errors_are_flagged(self):
+        self.add("to-be-tested", "9_t.md", mark="[~]", manual="1. Open Home.")
+        self.add("ready", "10_a.md", depends="Task 9")
+        out = self.board()
+        self.assertIn("● 10", out)
+        self.assertIn("To test:    1 manual check waiting", out)
+        self.assertIn("in the pipeline: run `taskflow check`", out)  # the index is stale after add()
+        self.run_cmd("index")
+        self.assertNotIn("in the pipeline", self.board())
+
+    def test_empty_board(self):
+        self.assertIn("Nothing active.", self.board())
+
+    def test_colour_only_when_asked_for(self):
+        self.chain()
+        text = tasks.render_board(tasks.Board(self.root), 120, color=True)
+        self.assertIn("\033[32m●\033[0m", text)

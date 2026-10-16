@@ -10,7 +10,9 @@ Standard library only. Usage: tasks.py <command> [--root DIR]; see --help.
 
 import argparse
 import fnmatch
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -561,11 +563,29 @@ def cmd_status(board, args):
     return 0
 
 
+def is_loopable(task):
+    return task.stage.name == "ready" and bool(task.who) and task.who != "interactive"
+
+
+def disjoint_groups(tasks):
+    """Greedy split into groups whose tasks share no file: each group can run
+    side by side, the groups one after the other."""
+    groups = []
+    for t in tasks:
+        for group in groups:
+            if not any(t.overlaps(other) for other in group):
+                group.append(t)
+                break
+        else:
+            groups.append([t])
+    return groups
+
+
 def cmd_next(board, args):
     ready = board.in_stage("ready")
     free = [t for t in ready if not board.waits_for(t)]
     blocked = [t for t in ready if board.waits_for(t)]
-    loopable = [t for t in free if t.who and t.who != "interactive"]
+    loopable = [t for t in free if is_loopable(t)]
     print(f"Ready and unblocked ({len(free)}):")
     for t in free:
         kind = "loop" if t in loopable else "you "
@@ -574,14 +594,7 @@ def cmd_next(board, args):
         print(f"Ready but blocked ({len(blocked)}):")
         for t in blocked:
             print(f"  {t.id:<5} waits for {', '.join(board.waits_for(t))}")
-    groups = []
-    for t in loopable:
-        for group in groups:
-            if not any(t.overlaps(other) for other in group):
-                group.append(t)
-                break
-        else:
-            groups.append([t])
+    groups = disjoint_groups(loopable)
     if len(loopable) > 1:
         shown = "  ".join("[" + ", ".join(t.id for t in g) + "]" for g in groups)
         print(f"Disjoint files, could run side by side in separate worktrees: {shown}")
@@ -606,6 +619,189 @@ def cmd_checks(board, args):
         print(f"## Task {t.id}: {t.title}  ({board.rel(t.path)})")
         print(t.section("manual check") or "(no `## Manual check` section: read the Status line)")
         print()
+    return 0
+
+
+# --- board -----------------------------------------------------------------
+# The pipeline as a picture. The active tasks fall into waves: wave 0 can move
+# now, wave n as soon as everything it waits for in the waves before is
+# through. Inside a wave, the task that releases the most work comes first.
+
+ACTIVE = ("to-grill", "design-gate", "ready", "real-check")
+KIND = {"to-grill": "grill", "design-gate": "design gate", "real-check": "real check"}
+SYMBOL = {"loop": "●", "you": "◆", "grill": "◇", "blocked": "○"}
+ANSI = {"loop": "32", "you": "33", "grill": "35", "blocked": "2", "dim": "2", "id": "1",
+        "head": "1", "unlock": "36", "warn": "31"}
+LEGEND = "● Loop can start  ◆ needs you  ◇ to grill  ○ waits  ▶n releases n tasks"
+BOARD_WIDTH = (60, 160)
+COLUMN = (30, 52)
+
+
+class BoardView:
+    def __init__(self, board):
+        self.board = board
+        self.tasks = [t for t in board.open if t.stage.name in ACTIVE]
+        ids = {t.id for t in self.tasks}
+        self.dependents = {t.id: [] for t in self.tasks}
+        for t in self.tasks:
+            for dep in set(t.depends):
+                if dep in ids and dep != t.id:
+                    self.dependents[dep].append(t)
+        self._wave = {}
+        self.waves = []
+        for t in self.tasks:
+            w = self.wave(t)
+            if w is not None:
+                self.waves += [[] for _ in range(w + 1 - len(self.waves))]
+                self.waves[w].append(t)
+        for wave in self.waves:
+            wave.sort(key=lambda t: (-len(self.unlocks(t)), _safe_key(t.id)))
+        self.held = [t for t in self.tasks if self._wave[t.id] is None]
+
+    def wave(self, task, path=()):
+        """None when the task cannot start at all: it waits, directly or down
+        the chain, for a task in the backlog, a missing one or a cycle."""
+        if task.id in self._wave:
+            return self._wave[task.id]
+        if task.id in path:
+            return None
+        w = 0
+        for dep in self.board.waits_for(task):
+            other = self.board.open_by_id.get(dep)
+            dw = self.wave(other, path + (task.id,)) if other and other.stage.name in ACTIVE else None
+            if dw is None:
+                w = None
+                break
+            w = max(w, dw + 1)
+        self._wave[task.id] = w
+        return w
+
+    def unlocks(self, task):
+        """Every active task that waits for this one, directly or down the chain."""
+        seen, stack = {}, list(self.dependents[task.id])
+        while stack:
+            t = stack.pop()
+            if t.id not in seen and t.id != task.id:
+                seen[t.id] = t
+                stack += self.dependents[t.id]
+        return sorted(seen.values(), key=lambda t: _safe_key(t.id))
+
+    def role(self, task):
+        if self._wave.get(task.id) != 0:
+            return "blocked"
+        if task.stage.name == "to-grill":
+            return "grill"
+        return "loop" if is_loopable(task) else "you"
+
+    def kind(self, task):
+        return KIND.get(task.stage.name) or task.who or "Who missing"
+
+    def why_held(self, task):
+        out = []
+        for dep in self.board.waits_for(task):
+            other = self.board.open_by_id.get(dep)
+            if other is None:
+                out.append(f"{dep} missing")
+            elif other.stage.name == "backlog":
+                out.append(f"{dep} in backlog")
+            elif self._wave.get(dep) is None:
+                out.append(f"{dep} held")
+        return ", ".join(out) or "a dependency cycle"
+
+
+class Painter:
+    def __init__(self, color):
+        self.color = color
+
+    def __call__(self, text, style):
+        return f"\033[{ANSI[style]}m{text}\033[0m" if self.color and text else text
+
+
+def _clip(text, width):
+    return text if len(text) <= width else text[: max(width - 1, 0)] + "…"
+
+
+def board_cell(view, task, width, paint):
+    """Two lines of exactly `width` visible characters."""
+    role = view.role(task)
+    released = len(view.unlocks(task))
+    head = f"{SYMBOL[role]} {task.id} "
+    tail = f" ▶{released}" if released else ""
+    title = _clip(task.title, width - len(head) - len(tail))
+    pad = " " * (width - len(head) - len(title) - len(tail))
+    first = (paint(SYMBOL[role], role) + " " + paint(task.id, "id") + " "
+             + (paint(title, "dim") if role == "blocked" else title) + pad + paint(tail, "unlock"))
+    waits = view.board.waits_for(task)
+    detail = _clip(("← " + ", ".join(waits) + " · " if waits else "") + view.kind(task), width - 2)
+    second = "  " + paint(detail, "dim") + " " * (width - 2 - len(detail))
+    return [first, second]
+
+
+def render_board(board, width, color):
+    view = BoardView(board)
+    paint = Painter(color)
+    to_test = len(board.in_stage("to-be-tested"))
+    lines = [paint("taskflow board", "head") + paint(
+        f"  {len(view.tasks)} active · {len(board.in_stage('backlog'))} backlog · "
+        f"{to_test} to test · {len(board.closed)} done", "dim"), ""]
+    errors, _ = check(board)
+    if errors:
+        lines += [paint(f"⚠ {len(errors)} error{'s' if len(errors) > 1 else ''} in the pipeline: run `taskflow check`", "warn"), ""]
+    if not view.tasks:
+        lines.append("Nothing active.")
+    labels = ["NOW"] + [f"AFTER {i}" for i in range(1, len(view.waves))]
+    columns = len(view.waves)
+    col = min((width - 3 * (columns - 1)) // columns if columns else width, COLUMN[1])
+    if columns and col >= COLUMN[0]:
+        blocks = []
+        for label, wave in zip(labels, view.waves):
+            block = [paint(_clip(f"{label} ({len(wave)})", col).ljust(col), "head"), paint("─" * col, "dim")]
+            for t in wave:
+                block += board_cell(view, t, col, paint)
+            blocks.append(block)
+        height = max(len(b) for b in blocks)
+        sep = paint(" │ ", "dim")
+        for row in range(height):
+            lines.append(sep.join(b[row] if row < len(b) else " " * col for b in blocks).rstrip())
+    else:
+        for label, wave in zip(labels, view.waves):
+            lines += [paint(f"{label} ({len(wave)})", "head")]
+            for t in wave:
+                lines += [l.rstrip() for l in board_cell(view, t, min(width, 100), paint)]
+            lines.append("")
+    if lines[-1]:
+        lines.append("")
+
+    now = view.waves[0] if view.waves else []
+    loopable = [t for t in now if view.role(t) == "loop"]
+    if loopable:
+        groups = disjoint_groups(loopable)
+        command = board.config_code("loop") or "/taskflow:task-loop"
+        later = [t.id for g in groups[1:] for t in g]
+        lines.append(paint("Loop now:   ", "loop") + command + " " + " ".join(t.id for t in groups[0])
+                     + (paint(f"  (then {', '.join(later)}: same files)", "dim") if later else ""))
+    yours = [t for t in now if view.role(t) in ("you", "grill")]
+    if yours:
+        lines.append(paint("Needs you:  ", "you") + " · ".join(
+            f"{t.id} {view.kind(t)}" + (f" ▶{len(view.unlocks(t))}" if view.unlocks(t) else "") for t in yours))
+        neck = yours[0]
+        if view.unlocks(neck):
+            lines.append(paint("Bottleneck: ", "warn") + f"{neck.id} ({view.kind(neck)}) holds "
+                         + ", ".join(t.id for t in view.unlocks(neck)))
+    for t in view.held:
+        lines.append(paint("Held:       ", "dim") + f"{t.id} {_clip(t.title, 40)} ← {view.why_held(t)}")
+    if to_test:
+        lines.append(paint("To test:    ", "dim") + f"{to_test} manual check{'s' if to_test > 1 else ''} waiting (`taskflow checks`)")
+    if view.tasks:
+        lines += ["", paint(LEGEND, "dim")]
+    return "\n".join(lines)
+
+
+def cmd_board(board, args):
+    width = args.width or shutil.get_terminal_size((100, 24)).columns
+    width = min(max(width, BOARD_WIDTH[0]), BOARD_WIDTH[1])
+    color = not args.plain and sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    print(render_board(board, width, color))
     return 0
 
 
@@ -685,6 +881,10 @@ def main(argv=None):
     sub.add_parser("index", help="regenerate the index in TASKS.md and 99_done/INDEX.md").set_defaults(run=cmd_index)
     sub.add_parser("status", help="count the tasks in each stage").set_defaults(run=cmd_status)
     sub.add_parser("next", help="ready tasks: unblocked, loopable, disjoint").set_defaults(run=cmd_next)
+    p = sub.add_parser("board", help="the active tasks as waves: what moves now, who blocks what, what each releases")
+    p.add_argument("--plain", action="store_true", help="no colours (also when piped or NO_COLOR is set)")
+    p.add_argument("--width", type=int, help="columns to fit (default: the terminal width)")
+    p.set_defaults(run=cmd_board)
     sub.add_parser("checks", help="print every pending Manual check").set_defaults(run=cmd_checks)
     sub.add_parser("next-id", help="print the next free task number").set_defaults(run=cmd_next_id)
     p = sub.add_parser("move", help="move a task to a stage, set its Status, regenerate the index")

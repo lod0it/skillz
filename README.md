@@ -6,14 +6,17 @@ My [Claude Code](https://docs.claude.com/en/docs/claude-code) skills, versioned 
 
 ### `taskflow`
 
-Two skills that work as a suite: break work down into self-contained tasks, then run them one at a time.
+Three skills that work as a suite: break work down into self-contained tasks, run them one at a time, and ask what to do next.
 
 | Skill | Command | Description |
 |---|---|---|
 | [`task-breakdown`](plugins/taskflow/skills/task-breakdown/SKILL.md) | `/taskflow:task-breakdown [plan \| id \| notes \| checks]` | One file per task in a staged `tasks/` folder pipeline (to-grill, design-gate, ready, real-check, to-be-tested, done), with built-in grilling, brain-dump sorting and a pass over pending manual checks. Folders, moves and the `TASKS.md` index are handled by `taskflow` (zero tokens). |
-| [`task-loop`](plugins/taskflow/skills/task-loop/SKILL.md) | `/taskflow:task-loop [n]` | Runs the tasks in `tasks/03_ready` one at a time, each in a fresh subagent using the repo's `implementer` profile (created on first run from `implementer-template.md`), and verifies each task at zero token cost: commit, test suite, `taskflow check`. |
+| [`task-loop`](plugins/taskflow/skills/task-loop/SKILL.md) | `/taskflow:task-loop [n]` | Runs the tasks in `tasks/03_ready` one at a time, each in a fresh subagent using the repo's `implementer` profile (created on first run from `implementer-template.md`), and verifies each task at zero token cost: commit, test suite, `taskflow check`. Also started from the `now-what` menu. |
+| [`now-what`](plugins/taskflow/skills/now-what/SKILL.md) | `/taskflow:now-what [focus]` | Shows the board (below), checks the open grills against the ready work, recommends an order, then offers the next actions as a menu and starts the one you pick. |
 
 The plugin also ships the `taskflow` command (`plugins/taskflow/bin/`, on the Bash tool's `PATH` while the plugin is enabled): the stable entry point for `tasks.py`, which `TASKS.md` and the `implementer` profile name as the Tool. Only `python3` (stdlib) is needed.
+
+`taskflow board` draws the active tasks as waves in the terminal: `NOW` is what can move at once (`●` the Loop, `◆` you, `◇` a grill), `AFTER n` what follows, with what each task waits for (`←`) and how many it releases (`▶n`), plus the Loop command for the disjoint tasks, the bottleneck and the chains held by the backlog. Run it from a shell, or inside Claude Code as `! taskflow board`; `--plain` drops the colours.
 
 ## Install
 

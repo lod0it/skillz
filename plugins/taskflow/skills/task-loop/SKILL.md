@@ -1,8 +1,7 @@
 ---
 name: task-loop
-description: Implements the ready tasks of a staged `tasks/` pipeline in order, one fresh subagent per task, until a stop condition. Use when the user runs /taskflow:task-loop.
+description: Implements the ready tasks of a staged `tasks/` pipeline in order, one fresh subagent per task, until a stop condition. Use only when the user runs /taskflow:task-loop or picks "start the Loop" from the /taskflow:now-what menu; never on your own initiative.
 argument-hint: "[max tasks | task ids to run together, default: until a stop condition]"
-disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Agent, Bash(git status *), Bash(git log *), Bash(git add *), Bash(git commit *), Bash(git merge *), Bash(git worktree *), Bash(git branch *), Bash(git diff *), Bash(taskflow *), Bash(python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py *)
 ---
 
