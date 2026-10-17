@@ -18,7 +18,7 @@ from typing import NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tasks  # noqa: E402
 
-DEFAULT_LOOP = "/taskflow:task-loop"
+DEFAULT_LOOP = "/taskflow:loop-it"
 
 
 class Command(NamedTuple):

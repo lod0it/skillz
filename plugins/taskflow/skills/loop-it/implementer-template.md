@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements one task file of this repo from tasks/03_ready end to end and closes it. Dispatched by /taskflow:task-loop with the task id and file.
+description: Implements one task file of this repo from tasks/03_ready end to end and closes it. Dispatched by /taskflow:loop-it with the task id and file.
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 

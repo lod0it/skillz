@@ -17,7 +17,7 @@ TASKS_MD = """# Implementation tasks
 ## Task system
 
 - **Inbox:** `note.md` (raw ideas)
-- **Loop:** `/taskflow:task-loop`
+- **Loop:** `/taskflow:loop-it`
 - **Who:** interactive, opus, sonnet
 - **Archived ids:** 1–9 (in `tasks/archive.md`)
 
@@ -316,12 +316,12 @@ class ReportsTest(BoardCase):
         self.assertIn("  you   13 ", out)
         self.assertIn("  14    waits for 10", out)
         self.assertIn("side by side in separate worktrees: [10, 12]  [11]", out)
-        self.assertIn("3 tasks fit /taskflow:task-loop: propose it", out)
+        self.assertIn("3 tasks fit /taskflow:loop-it: propose it", out)
         self.assertIn("1 tasks wait for the user's manual check", out)
 
     def test_next_says_nothing_about_the_loop_for_a_single_task(self):
         self.add("ready", "10_a.md")
-        self.assertNotIn("/taskflow:task-loop", self.run_cmd("next")[1])
+        self.assertNotIn("/taskflow:loop-it", self.run_cmd("next")[1])
 
     def test_dependency_on_a_to_be_tested_task_is_satisfied(self):
         self.add("to-be-tested", "9_t.md", mark="[~]", manual="1. Open Home.")
@@ -353,7 +353,8 @@ if __name__ == "__main__":
 
 
 class MigrateToolTest(BoardCase):
-    OLD = "- **Tool:** `python3 ~/.claude/skills/task-breakdown/tasks.py`\nRun /task-loop, see /task-breakdown notes, ~/.claude/skills/task-breakdown/x\n"
+    OLD = ("- **Tool:** `python3 ~/.claude/skills/task-breakdown/tasks.py`\nRun /task-loop, see /task-breakdown notes, "
+           "~/.claude/skills/task-breakdown/x, then /taskflow:task-loop 3 or /taskflow:task-breakdown checks\n")
 
     def setUp(self):
         super().setUp()
@@ -372,9 +373,10 @@ class MigrateToolTest(BoardCase):
         self.assertEqual(code, 0)
         text = self.profile.read_text(encoding="utf-8")
         self.assertIn("`taskflow`", text)
-        self.assertIn("/taskflow:task-loop", text)
-        self.assertIn("/taskflow:task-breakdown notes", text)
+        self.assertIn("/taskflow:loop-it", text)
+        self.assertIn("/taskflow:break-it-down notes", text)
         self.assertIn("~/.claude/skills/task-breakdown/x", text)
+        self.assertIn("/taskflow:loop-it 3 or /taskflow:break-it-down checks", text)
         self.assertEqual(self.check()[0], 0)
 
     def test_migrate_is_idempotent(self):
@@ -419,7 +421,7 @@ class BoardTest(BoardCase):
         self.assertIn("◇ 14 Limits", out)
         self.assertIn("○ 13 Print", out)
         self.assertIn("← 11, 12 · opus", out)
-        self.assertIn("Loop now:   /taskflow:task-loop 10\n", out)
+        self.assertIn("Loop now:   /taskflow:loop-it 10\n", out)
         self.assertIn("Needs you:  12 real check ▶1 · 14 grill\n", out)
         self.assertIn("Bottleneck: 12 (real check) holds 13\n", out)
         self.assertNotIn("\033[", out)
@@ -434,7 +436,7 @@ class BoardTest(BoardCase):
         self.add("ready", "10_a.md")
         self.add("ready", "11_b.md")
         self.add("ready", "12_c.md", files="`src/c.py`")
-        self.assertIn("/taskflow:task-loop 10 12  (then 11: same files)", self.board())
+        self.assertIn("/taskflow:loop-it 10 12  (then 11: same files)", self.board())
 
     def test_backlog_and_missing_dependencies_hold_the_chain(self):
         self.add("backlog", "12_later.md", files="—")

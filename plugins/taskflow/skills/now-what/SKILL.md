@@ -48,10 +48,10 @@ End with AskUserQuestion: one question ("What do we do now?" in the conversation
 
 | Action | Runs, once chosen |
 |---|---|
-| Start the Loop on the `Loop now` group | Skill `taskflow:task-loop` with the ids, as the board prints them |
-| Grill a task | Skill `taskflow:task-breakdown` with the task id |
-| A design gate round on its frames | Skill `taskflow:task-breakdown` with the task id(s) |
+| Start the Loop on the `Loop now` group | Skill `taskflow:loop-it` with the ids, as the board prints them |
+| Grill a task | Skill `taskflow:break-it-down` with the task id |
+| A design gate round on its frames | Skill `taskflow:break-it-down` with the task id(s) |
 | A real check, with the user here | read the task's real check and walk the user through it |
-| The manual checks waiting | Skill `taskflow:task-breakdown` with `checks` |
+| The manual checks waiting | Skill `taskflow:break-it-down` with `checks` |
 
 Then do exactly the chosen action, and nothing before the choice. If the user writes their own answer, follow it; if they dismiss the menu, stop. Do not chain a second action after the first: when it is over, the user can run `/taskflow:now-what` again.

@@ -335,15 +335,18 @@ def write_index(board):
 
 # --- old Tool path ---------------------------------------------------------
 # Before the plugin, the Tool was `python3 ~/.claude/skills/task-breakdown/tasks.py`
-# and the skills were `/task-breakdown`, `/task-loop`.
+# and the skills were `/task-breakdown`, `/task-loop`. In 0.5.0 the skills became
+# `/taskflow:break-it-down` and `/taskflow:loop-it`.
 
 OLD_TOOL = "python3 ~/.claude/skills/task-breakdown/tasks.py"
-OLD_COMMAND_RE = re.compile(r"(?<![\w./~:-])/task-(breakdown|loop)\b")
+RENAMED = {"task-breakdown": "break-it-down", "task-loop": "loop-it"}
+OLD_COMMAND_RE = re.compile(r"(?<![\w./~:-])(?:/taskflow:|/)(task-breakdown|task-loop)\b")
 MIGRATABLE = ("TASKS.md", ".claude/agents/implementer.md")
 
 
 def migrate_text(text):
-    return OLD_COMMAND_RE.sub(r"/taskflow:task-\1", text.replace(OLD_TOOL, "taskflow"))
+    text = text.replace(OLD_TOOL, "taskflow")
+    return OLD_COMMAND_RE.sub(lambda m: "/taskflow:" + RENAMED[m.group(1)], text)
 
 
 def old_tool_files(board):
@@ -776,7 +779,7 @@ def render_board(board, width, color):
     loopable = [t for t in now if view.role(t) == "loop"]
     if loopable:
         groups = disjoint_groups(loopable)
-        command = board.config_code("loop") or "/taskflow:task-loop"
+        command = board.config_code("loop") or "/taskflow:loop-it"
         later = [t.id for g in groups[1:] for t in g]
         lines.append(paint("Loop now:   ", "loop") + command + " " + " ".join(t.id for t in groups[0])
                      + (paint(f"  (then {', '.join(later)}: same files)", "dim") if later else ""))
