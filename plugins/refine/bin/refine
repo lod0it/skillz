@@ -1,5 +1,0 @@
-#!/bin/sh
-# Stable entry point for the refine command: the plugin cache path changes
-# with every version, this command name does not.
-here=$(cd "$(dirname "$0")" && pwd)
-exec python3 "$here/../lib/refine.py" "$@"
