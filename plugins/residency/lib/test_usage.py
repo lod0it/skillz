@@ -34,8 +34,8 @@ class UsageTest(unittest.TestCase):
         p = self.here / "a.jsonl"
         write(p, [
             tu("1", "Bash", command="ls"),
-            tu("2", "Skill", skill="refine:ablate"),
-            tu("2", "Skill", skill="refine:ablate"),  # duplicate record
+            tu("2", "Skill", skill="demo:skill"),
+            tu("2", "Skill", skill="demo:skill"),  # duplicate record
             tu("3", "mcp__pen__x"), tu("4", "mcp__pen__y"),
             {"type": "assistant", "isSidechain": True, "message": {"content": [
                 {"type": "tool_use", "id": "5", "name": "Bash", "input": {}}]}},
@@ -47,7 +47,7 @@ class UsageTest(unittest.TestCase):
         c = usage.scan_file(p)
         self.assertEqual(c.tools, {"Bash": 2, "Skill": 1, "mcp__pen__x": 1, "mcp__pen__y": 1})
         self.assertEqual(c.mcp, {"pen": 2})
-        self.assertEqual(c.skills, {"refine:ablate": 1, "clear": 1, "taskflow:board": 1})
+        self.assertEqual(c.skills, {"demo:skill": 1, "clear": 1, "taskflow:board": 1})
 
     def test_here_all_and_last_n(self):
         other = self.root / "-other"
