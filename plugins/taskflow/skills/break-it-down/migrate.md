@@ -47,7 +47,9 @@ that no longer exists. Leave committing to the user.
 ## An `OLD-TOOL` error instead
 
 `check` prints `OLD-TOOL` when `TASKS.md` or `.claude/agents/implementer.md`
-still names the pre-plugin Tool (`python3 ~/.claude/skills/task-breakdown/tasks.py`)
-or the un-namespaced commands (`/task-breakdown`, `/task-loop`). That is not a
+still names the pre-plugin Tool (`python3 ~/.claude/skills/task-breakdown/tasks.py`),
+the un-namespaced commands (`/task-breakdown`, `/task-loop`) or the commands
+as they were before 0.5.0 (`/taskflow:task-breakdown`, `/taskflow:task-loop`;
+now `/taskflow:break-it-down`, `/taskflow:loop-it`). That is not a
 layout migration: run `migrate-tool` (zero tokens, no proposal needed), then
 `check`. Tell the user which files changed; leave committing to them.

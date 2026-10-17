@@ -144,15 +144,15 @@ class ActionTest(TuiCase):
         ts = [b.open_by_id["10"], b.open_by_id["12"]]
         c = bt.loop_command(b, ts, {"TMUX": "/tmp/tmux-1/default,1,0"})
         self.assertEqual(c.argv[:2], ["tmux", "new-window"])
-        self.assertEqual(c.argv[-1], "claude '/taskflow:task-loop 10 12'")
+        self.assertEqual(c.argv[-1], "claude '/taskflow:loop-it 10 12'")
         c = bt.loop_command(b, ts, {})
-        self.assertEqual((c.argv, c.stdin), (["pbcopy"], "/taskflow:task-loop 10 12"))
+        self.assertEqual((c.argv, c.stdin), (["pbcopy"], "/taskflow:loop-it 10 12"))
         self.assertIsNone(bt.loop_command(b, [], {}))
 
     def test_loop_name_comes_from_config(self):
         self.chain()
         md = self.root / "TASKS.md"
-        md.write_text(md.read_text().replace("`/taskflow:task-loop`", "`/my:loop`"), encoding="utf-8")
+        md.write_text(md.read_text().replace("`/taskflow:loop-it`", "`/my:loop`"), encoding="utf-8")
         b = tasks.Board(self.root)
         self.assertEqual(bt.loop_text(b, [b.open_by_id["10"]]), "/my:loop 10")
 
