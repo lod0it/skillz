@@ -49,25 +49,12 @@ Deltas come from headless `claude -p "/context"` runs, which cost 0 tokens and w
 
 **Refresh for free.** The totals come from the last interactive `/context` in the project's transcripts. After a write the screen says the snapshot is stale: run `claude`, type `/context`, then `/exit`. Neither command reaches the model, so it costs 0 tokens; `residency` then shows the new totals and `last change  predicted … actual … error …`.
 
-### `refine`
-
-Code-improvement skills and the `refine` command that backs them (`plugins/refine/bin/`, on the Bash tool's `PATH` while the plugin is enabled). Only `python3` (stdlib) is needed. `refine --version` prints the version.
-
-- `refine golden record|verify <cases.json> <dir> [--timeout S]` records a script's stdout, stderr, exit code and produced files for a list of cases (each run twice; unstable cases are reported, not stored), then reruns them and prints `OK` or a compact diff per failing case (exit 1). The `cases.json` format is in `refine golden --help`.
-- `refine measure <file> [--time <cases.json>]` prints code lines, total lines and lexical tokens as JSON; `--time` adds the median wall time of the cases over 5 runs.
-- `refine coverage <script> <cases.json> [--scratch DIR] [--python PY]` runs the cases under the script's language coverage tool (Python: coverage.py; shell: `bash -x`; JS/TS: c8; Go: `go test -coverprofile`) and prints JSON with the script's covered line numbers (`mode: measured`). With no usable tool it prints `mode: unavailable` with an `install_hint` that installs into `--scratch` (a venv or `npm --prefix`, never global) and exits 3. `refine coverage --probe <script>` only reports language, tool and availability.
-
-| Skill | Command | Description |
-|---|---|---|
-| `ablate` | `/refine:ablate <script>` (explicit only) | Ablative simplification of one file: removes one logical block at a time and keeps the cut only if behaviour is unchanged. The oracle is the existing tests, else a golden output of cases you approve, else static reasoning. Lines the oracle does not cover are left alone; with no coverage tool (and no local install) only coverage-independent cuts are tried. The public interface stays frozen except for symbols you approve. The three approvals are asked once, up front. Each kept cut is a commit on `ablate/<stem>-<date>`, squashed at the end, never merged. The report gives lines/tokens before→after, the mode, accepted and rejected cuts, unverifiable lines and suggestions. Design in `docs/ablate-design.md`. |
-
 ## Install
 
 ```
 /plugin marketplace add lod0it/skillz
 /plugin install taskflow@skillz
 /plugin install residency@skillz
-/plugin install refine@skillz
 ```
 
 Update with `/plugin update taskflow@skillz`. On every release bump `plugins/taskflow/VERSION` and `version` in `plugins/taskflow/.claude-plugin/plugin.json` together (a test fails when they differ): the manifest version pins what users get.
