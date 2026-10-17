@@ -1,9 +1,0 @@
-{
-  "name": "refine",
-  "displayName": "Refine",
-  "version": "0.2.0",
-  "description": "Code-improvement skills and the refine command that backs them (golden outputs, measures, coverage maps).",
-  "author": { "name": "Giuseppe Alfano" },
-  "repository": "https://github.com/lod0it/skillz",
-  "keywords": ["refactor", "simplify", "code-quality"]
-}
