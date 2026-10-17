@@ -1,8 +1,8 @@
 ---
 name: task-breakdown
 description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (backlog, to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /taskflow:task-breakdown, asks to plan, grill or split a task, to sort their notes into tasks, or to go through the pending manual checks.
-argument-hint: "[plan-doc path | task id | notes | checks]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(taskflow *)
+argument-hint: "[plan-doc path | task id | notes | checks | checks --auto]"
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(taskflow *), Bash(tmux *)
 ---
 
 This skill runs inline in the current session — deliberately **not**
@@ -53,6 +53,7 @@ the user.
 | a task id (`94`, `70b`) | [split.md](split.md): grill it if its decisions are open, then make it ready or split it into children. |
 | `notes`, or a raw idea in the argument or the conversation | [notes.md](notes.md): the inbox is sorted into tasks. |
 | `checks`, or the user reports how a manual check went | [checks.md](checks.md): one pass over every pending Manual check. |
+| `checks --auto` | [checks-auto.md](checks-auto.md): run the steps a shell can do, then ask the user only about the rest. |
 
 Every branch that writes or rewrites a task file follows
 [task-format.md](task-format.md).
