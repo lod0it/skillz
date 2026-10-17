@@ -1,6 +1,8 @@
 {
   "name": "skillz",
-  "owner": { "name": "Giuseppe Alfano" },
+  "owner": {
+    "name": "Giuseppe Alfano"
+  },
   "description": "Daily workflows in Claude Code, skills and plugins, to live a better life.",
   "plugins": [
     {
@@ -12,11 +14,6 @@
       "name": "residency",
       "source": "./plugins/residency",
       "description": "residency command: zero-token terminal tool to see and trim resident context. No skills."
-    },
-    {
-      "name": "refine",
-      "source": "./plugins/refine",
-      "description": "Code-improvement skills (/refine:ablate: ablative simplification of one script) and the refine command behind them: golden outputs, measures and coverage maps."
     }
   ]
 }
