@@ -48,3 +48,24 @@ that drops after this point has lost nothing.
 
 Done when every decision of the Outcome is implemented by exactly one task
 and `check` prints `0 errors`.
+
+## A task in the design gate
+
+The design gate is the one place, with the grilling, where the user works
+with you; everything after it runs unattended. Build or revise the design
+with the user in the tool the `Design gate` line names, round by round, until
+they approve each frame. Then, before closing the task:
+
+1. **Export every approved frame** as a PNG into the folder the `Design refs`
+   line of "Task system" names (`<frame id>_<slug>.png`; one image per state
+   the frame shows: empty, filled, error). These images are the contract: the
+   implementer builds from them, the verifier compares screenshots with
+   them, and neither can open the design tool. A frame approved but not
+   exported does not exist for the Loop.
+2. **Cite them** by path in the Context of each UI task that implements the
+   frame, and in its Verification ("compare the Candidates screen with
+   `<path>`").
+3. `move <id> done --note "approved <date>: <frame ids>, exported to <folder>"`.
+
+No `Design refs` line yet: propose a folder inside the repo (next to the
+design docs), write the line, and say so in the report.

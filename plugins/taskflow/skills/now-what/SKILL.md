@@ -20,7 +20,7 @@ Run `taskflow board --plain`. It gives, without reading any task file:
 - `Loop now:` the loopable tasks of `NOW` with disjoint `Files`, already as one command; `(then …: same files)` the ones that must follow them;
 - `Needs you:`, `Bottleneck:` (the user's task that holds the most), `Held:` (chains stuck on the backlog, a missing task or a cycle), `To test:`.
 
-If the board says there are errors, run `taskflow check` and report them first, then go on. If it shows manual checks waiting, run `taskflow checks` only when you need their content for the order.
+If the board says there are errors, run `taskflow check` and report them first, then go on. `To test:` counts tasks waiting for the Loop's verifier (the Loop runs them first) and names the few handed to the user; run `taskflow checks` only when you need their content for the order.
 
 ## 2. Open grills against ready work
 
@@ -37,9 +37,9 @@ Verify a claim in the code before stating it ("`post_batch` already takes `count
 Open with the board, verbatim, in a ```` ```text ```` block: it is the picture, the rest is the commentary. Then, short, in this order. No tables; no restating the board or the task files.
 
 1. **Start now with the Loop** — the `Loop now` group and why; say if the Loop has only one useful strand, or if a conflicting grill should go first.
-2. **Needs you** — conflicting grills first, then the bottleneck and what it releases, design gate frames (group the ones that share one design round), other real checks, manual checks.
+2. **Needs you** — conflicting grills first, then the bottleneck and what it releases, design gate frames (group the ones that share one design round), grills the Loop sent back as blocked, other real checks, verifications handed to the user.
 3. **Can wait** — independent or additive grills, with the one-line reason.
-4. **Recommended flow** — numbered, 3 to 6 steps, mixing the Loop (background, fresh contexts) with what the user does here.
+4. **Recommended flow** — numbered, 3 to 6 steps. The shape of a day: the user's part first, while they are here (grills, design gates: each one releases Loop work), then the Loop unattended until a stop condition. Put a Loop step earlier only when it has work no grill or design changes.
 5. **Open question** — only if a decision of the user's changes the order. Otherwise omit.
 
 ## 4. Menu
@@ -48,10 +48,11 @@ End with AskUserQuestion: one question ("What do we do now?" in the conversation
 
 | Action | Runs, once chosen |
 |---|---|
+| Start the Loop, unattended | Skill `taskflow:loop-it` with no argument: it verifies the backlog, then implements and verifies until a stop condition |
 | Start the Loop on the `Loop now` group | Skill `taskflow:loop-it` with the ids, as the board prints them |
 | Grill a task | Skill `taskflow:break-it-down` with the task id |
 | A design gate round on its frames | Skill `taskflow:break-it-down` with the task id(s) |
 | A real check, with the user here | read the task's real check and walk the user through it |
-| The manual checks waiting | Skill `taskflow:break-it-down` with `checks` |
+| The verifications handed to the user | Skill `taskflow:break-it-down` with `checks` |
 
 Then do exactly the chosen action, and nothing before the choice. If the user writes their own answer, follow it; if they dismiss the menu, stop. Do not chain a second action after the first: when it is over, the user can run `/taskflow:now-what` again.

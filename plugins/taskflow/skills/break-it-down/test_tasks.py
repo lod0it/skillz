@@ -31,10 +31,11 @@ Text after the index.
 
 
 def task_text(task_id, title="A task", mark="[ ]", status="not started", type_="feature",
-              depends="—", who="opus", files="`src/a.py`", manual="Nothing to check by hand."):
+              depends="—", who="opus", files="`src/a.py`", manual="Nothing to check by hand.",
+              heading="Verification"):
     return (f"# Task {task_id}: {title}\n**Status:** {mark} {status}\n**Type:** {type_}\n"
             f"**Depends on:** {depends}\n**Who:** {who}\n**Files:** {files}\n"
-            f"**Conventions:** `TASKS.md`.\n\n## Goal\nDo it.\n\n## Manual check\n{manual}\n")
+            f"**Conventions:** `TASKS.md`.\n\n## Goal\nDo it.\n\n## {heading}\n{manual}\n")
 
 
 class BoardCase(unittest.TestCase):
@@ -182,6 +183,22 @@ class CheckTest(BoardCase):
         self.add("to-be-tested", "10_a.md", mark="[~]")
         self.assertIn("nothing to check by hand, so it belongs in 99_done", self.check()[1])
 
+    def test_ready_task_needs_a_verification_section(self):
+        path = self.add("ready", "10_a.md")
+        path.write_text(path.read_text(encoding="utf-8").replace("## Verification", "## Notes"), encoding="utf-8")
+        self.run_cmd("index")
+        self.assertIn("missing `## Verification`", self.check()[1])
+
+    def test_lessons_file_belongs_in_the_tasks_root(self):
+        (self.root / "tasks" / "LESSONS.md").write_text("# Lessons of the Loop\n", encoding="utf-8")
+        self.run_cmd("index")
+        self.assertEqual(self.check()[0], 0)
+
+    def test_legacy_manual_check_section_still_counts(self):
+        self.add("ready", "10_a.md", heading="Manual check")
+        self.run_cmd("index")
+        self.assertEqual(self.check()[0], 0)
+
     def test_closed_tasks_are_never_validated(self):
         (self.root / "tasks" / "99_done" / "36b-one.md").write_text("# Task 36b: One\n**Status:** superseded\n")
         (self.root / "tasks" / "99_done" / "36b-two.md").write_text("no header at all\n")
@@ -227,7 +244,7 @@ class MoveTest(BoardCase):
         code, out = self.run_cmd("move", "10", "to-be-tested")
         self.assertEqual(code, 0)
         moved = self.root / "tasks" / "05_to-be-tested" / "10_first.md"
-        self.assertIn("**Status:** [~] code done; manual check pending", moved.read_text(encoding="utf-8"))
+        self.assertIn("**Status:** [~] code done; verification pending", moved.read_text(encoding="utf-8"))
         self.assertFalse((self.root / "tasks" / "03_ready" / "10_first.md").exists())
         self.assertIn("`tasks/05_to-be-tested/10_first.md`", self.index())
 
@@ -317,7 +334,18 @@ class ReportsTest(BoardCase):
         self.assertIn("  14    waits for 10", out)
         self.assertIn("side by side in separate worktrees: [10, 12]  [11]", out)
         self.assertIn("3 tasks fit /taskflow:loop-it: propose it", out)
-        self.assertIn("1 tasks wait for the user's manual check", out)
+        self.assertIn("1 tasks wait for verification (the Loop runs it before new work)", out)
+        self.assertNotIn("handed to the user", out)
+
+    def test_next_and_checks_flag_a_verification_handed_to_the_user(self):
+        self.add("to-be-tested", "9_t.md", mark="[~]", status="needs the user: a second machine", manual="1. Open Home.")
+        self.add("to-be-tested", "8_u.md", mark="[~]", manual="1. Open Home.", heading="Manual check")
+        out = self.run_cmd("next")[1]
+        self.assertIn("1 tasks wait for verification", out)
+        self.assertIn("Verification handed to the user: 9 (`checks`)", out)
+        out = self.run_cmd("checks")[1]
+        self.assertIn("(tasks/05_to-be-tested/9_t.md)  [needs the user]", out)
+        self.assertIn("## Task 8: A task  (tasks/05_to-be-tested/8_u.md)\n1. Open Home.", out)
 
     def test_next_says_nothing_about_the_loop_for_a_single_task(self):
         self.add("ready", "10_a.md")
@@ -382,6 +410,42 @@ class MigrateToolTest(BoardCase):
     def test_migrate_is_idempotent(self):
         self.run_cmd("migrate-tool")
         self.assertIn("nothing to migrate", self.run_cmd("migrate-tool")[1])
+
+
+class ExclusiveTest(BoardCase):
+    def lock(self):
+        return tasks.lock_path(self.root)
+
+    def test_runs_the_command_returns_its_code_and_releases_the_lock(self):
+        if not tasks._shell():
+            self.skipTest("bash not available")
+        code, _ = self.run_cmd("exclusive", "true; exit 3")
+        self.assertEqual(code, 3)
+        self.assertFalse(self.lock().exists())
+
+    def test_a_held_lock_makes_the_second_caller_wait_then_give_up(self):
+        self.assertTrue(tasks.acquire_lock(self.lock(), "first", wait=0))
+        self.assertFalse(tasks.acquire_lock(self.lock(), "second", wait=0))
+        with mock.patch.object(tasks, "LOCK_POLL", 0.01):
+            code, _ = self.run_cmd("exclusive", "--wait", "0.0005", "exit 0")
+        self.assertEqual(code, tasks.EXIT_BUSY)
+        self.assertIn("first", self.lock().read_text(encoding="utf-8"))
+
+    def test_a_lock_nobody_refreshes_is_broken(self):
+        self.assertTrue(tasks.acquire_lock(self.lock(), "dead holder", wait=0))
+        self.assertTrue(tasks.acquire_lock(self.lock(), "next", wait=0, stale=-1))
+        self.assertIn("next", self.lock().read_text(encoding="utf-8"))
+
+    def test_worktrees_share_one_lock(self):
+        def git(*args, cwd=self.root):
+            return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True)
+        if git("init").returncode != 0:
+            self.skipTest("git not available")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "init")
+        other = self.root.parent / (self.root.name + "-wt")
+        self.addCleanup(lambda: git("worktree", "remove", "--force", str(other)))
+        self.assertEqual(git("worktree", "add", str(other)).returncode, 0)
+        self.assertEqual(tasks.lock_path(self.root).resolve(), tasks.lock_path(other).resolve())
 
 
 class PluginVersionTest(unittest.TestCase):
@@ -452,7 +516,7 @@ class BoardTest(BoardCase):
         self.add("ready", "10_a.md", depends="Task 9")
         out = self.board()
         self.assertIn("● 10", out)
-        self.assertIn("To test:    1 manual check waiting", out)
+        self.assertIn("To test:    1 waiting for verification (`taskflow checks`)", out)
         self.assertIn("in the pipeline: run `taskflow check`", out)  # the index is stale after add()
         self.run_cmd("index")
         self.assertNotIn("in the pipeline", self.board())

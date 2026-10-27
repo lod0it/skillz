@@ -8,10 +8,12 @@ One file per task under `tasks/`, one folder per stage. The task files are the s
 - **Inbox:** `note.md` (raw ideas, any language, kept out of git; sorted with `/taskflow:break-it-down notes`)
 - **Loop:** —
 - **Test:** — (the command that runs the full suite; the Loop verifies every task with it)
+- **Verify:** — (how a session runs the product to look at it: the dev server with fake adapters, a headless browser, a CLI on sample data; the Loop's verifier follows it)
 - **Who:** interactive, opus, sonnet
 - **Types:** feature, bug, polish
 - **Archived ids:** —
 - **Design gate:** —
+- **Design refs:** — (the folder of the approved design images the Loop builds and verifies UI against)
 
 ## Pipeline
 
@@ -20,18 +22,21 @@ A task's folder says which kind of session it needs next. Only the Tool moves a 
 | Folder | Holds | Session it needs |
 |---|---|---|
 | `tasks/01_to-grill/` | ideas and tasks whose decisions are still open | grilling with the user (`/taskflow:break-it-down <id>`) |
-| `tasks/02_design-gate/` | designs the user approves before any code | design, with the user |
-| `tasks/03_ready/` | code ready to implement | code |
-| `tasks/04_real-check/` | planned checks that spend real resources (tokens, hardware, accounts) | with the user, never unattended |
-| `tasks/05_to-be-tested/` | code done, the user's Manual check pending; counts as done for dependencies | the user, by hand |
+| `tasks/02_design-gate/` | designs the user approves before any code; approval exports the frames to `Design refs` | design, with the user |
+| `tasks/03_ready/` | code ready to implement | the Loop |
+| `tasks/04_real-check/` | planned checks that need what only the user has or pays for (paid tokens, another machine, an account) | with the user, never unattended |
+| `tasks/05_to-be-tested/` | code done, the verifier's check pending (or, Status `needs the user`, handed to the user); counts as done for dependencies | the Loop's verifier |
 | `tasks/99_done/` | closed, rejected and obsolete tasks: history | none |
 
 ## Workflow
 
-- **One task per fresh session:** read its file, implement it, close it.
+- **The user's part** is the grilling and the design gate (plus the rare real check). From `03_ready` on the Loop works unattended: implement, verify, file the fix, learn.
+- **One task per fresh session:** read its file and `tasks/LESSONS.md`, implement it, close it.
 - **Before implementing a ready task by hand,** run `next`: when it reports several tasks fit for the Loop, propose the Loop first.
-- **Closing a task:** rewrite its `## Manual check` with what the user must try by hand (at most 5 steps: what to open, what to do, what they should see) plus what you could not verify, or the single line `Nothing to check by hand.` Then `move <id> to-be-tested` when there are steps, `move <id> done` when there are none. Commit locally if appropriate.
-- **The user's check:** `/taskflow:break-it-down checks` lists every pending Manual check. A check that passes closes the task (`move <id> done`); one that fails becomes a new `bug` task that names the old one, and the old one is closed with a `--note`.
+- **Closing a task:** rewrite its `## Verification` as the checklist a verifier needs (per acceptance criterion: the state to reach, the result to observe; the design images to compare), write its Outcome, `move <id> to-be-tested`, commit locally.
+- **Verification:** a separate session that did not write the code runs the product as `Verify` says and checks the task against its criteria and design. Passed → `move <id> done`. Failed → a new `bug` task that `Fixes Task <id> (attempt n)` and the old one closed with a `--note`; from attempt 3 the fix goes to grilling. Only what would spend paid tokens or needs what only the user has is handed to the user (`/taskflow:break-it-down checks`).
+- **One heavy run at a time:** the suite, a verification and a real run go through `taskflow exclusive "<command>"`, so that no two overlap, worktrees included.
+- **Lessons:** `tasks/LESSONS.md` holds the rules the Loop learned from its failures; implementer, verifier and break-it-down read it before working.
 - **Cross-references use the id** ("Outcome of Task 12"), found with `tasks/*/12_*.md`: a path would break at the next move.
 - **New tasks, splits and inbox triage** go through `/taskflow:break-it-down`.
 
@@ -50,7 +55,7 @@ A task's folder says which kind of session it needs next. Only the Tool moves a 
 ## Context (you have no memory of prior sessions — read this, don't assume)
 ## Steps
 ## Acceptance criteria
-## Manual check
+## Verification
 ## Outcome
 ## When done
 Close it as "Closing a task" in `TASKS.md` says.

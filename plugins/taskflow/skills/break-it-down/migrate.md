@@ -31,9 +31,9 @@ Wait for the user's yes.
    keeps the Status text). An open task that lives inside `TASKS.md` becomes
    its own file.
 4. Bring every open header to the format: `set` the missing fields, rewrite
-   `Depends on` as ids with notes in brackets, add `## Manual check` to
-   tasks in `03_ready` (expected check) and `05_to-be-tested` (the concrete
-   steps, from the Status line and Outcome).
+   `Depends on` as ids with notes in brackets, add `## Verification` to
+   tasks in `03_ready` (what the verifier will check) and `05_to-be-tested`
+   (the concrete checks, from the Status line and Outcome).
 5. Give `TASKS.md` the sections of
    `${CLAUDE_SKILL_DIR}/TASKS-TEMPLATE.md` (Task system, Pipeline, Workflow,
    Task template, the two index markers), keeping the repo's own Conventions

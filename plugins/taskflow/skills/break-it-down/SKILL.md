@@ -1,8 +1,8 @@
 ---
 name: break-it-down
-description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (backlog, to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /taskflow:break-it-down, asks to plan, grill or split a task, to sort their notes into tasks, or to go through the pending manual checks.
-argument-hint: "[plan-doc path | task id | notes | checks | checks --auto]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(taskflow *), Bash(tmux *)
+description: Turns a plan document, an undecided task or raw notes into self-contained task files in a staged `tasks/` pipeline (backlog, to-grill, design-gate, ready, real-check, to-be-tested, done) with a generated index. Use when the user runs /taskflow:break-it-down, asks to plan, grill or split a task, to sort their notes into tasks, to run a design gate round, or to go through the verifications the Loop handed to the user.
+argument-hint: "[plan-doc path | task id | notes | checks]"
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(taskflow *)
 ---
 
 This skill runs inline in the current session — deliberately **not**
@@ -50,10 +50,9 @@ the user.
 |---|---|
 | none | Run `status` and `next`, report them in a few lines, ask which branch the user wants. |
 | a path to an existing document | [plan.md](plan.md): a plan becomes tasks. |
-| a task id (`94`, `70b`) | [split.md](split.md): grill it if its decisions are open, then make it ready or split it into children. |
+| a task id (`94`, `70b`) | [split.md](split.md): grill it if its decisions are open, then make it ready or split it into children; a design-gate task gets its design round and the export of the approved frames. |
 | `notes`, or a raw idea in the argument or the conversation | [notes.md](notes.md): the inbox is sorted into tasks. |
-| `checks`, or the user reports how a manual check went | [checks.md](checks.md): one pass over every pending Manual check. |
-| `checks --auto` | [checks-auto.md](checks-auto.md): run the steps a shell can do, then ask the user only about the rest. |
+| `checks`, or the user reports how a check went | [checks.md](checks.md): one pass over the verifications the Loop handed to the user. |
 
 Every branch that writes or rewrites a task file follows
 [task-format.md](task-format.md).

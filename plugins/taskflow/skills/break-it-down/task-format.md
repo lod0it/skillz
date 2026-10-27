@@ -15,7 +15,7 @@ or the conversation are in.
 | a decision only the user can make | `01_to-grill` |
 | a design the user approves before code (only when Task system declares a Design gate) | `02_design-gate` |
 | nothing but implementing | `03_ready` |
-| real resources: paid tokens, a second machine, an account, a download (it is a check, planned in advance) | `04_real-check` |
+| something only the user has or pays for: paid tokens, a second machine, an account, hardware this machine lacks, a person's judgement (it is a check, planned in advance). What runs free on this machine (a local server, a local GPU, a download from a public mirror) is not a real check: it is ready work the Loop runs | `04_real-check` |
 
 `05_to-be-tested` and `99_done` are reached only through `move`, when work
 closes.
@@ -35,9 +35,10 @@ the grilling has to settle. `Files` is `—` until the decisions exist.
   because both edit the same file**; a note goes in brackets
   (`Task 54 (same file)`). `—` when free. This line is parsed: ids and
   bracketed notes only.
-- **Who:** `interactive` when the user must be in the session (grilling,
-  design approval, real checks, a judgement about look and feel); otherwise
-  the model that fits the difficulty.
+- **Who:** `interactive` only when the user must be in the session:
+  grilling, design approval, a real check. Look and feel is settled at the
+  design gate, so a UI task is not interactive: the Loop's verifier compares
+  it with the approved design. Otherwise the model that fits the difficulty.
 - **Files:** every file the task will edit, tests and docs included, each in
   backticks. Read the code to find them: `check` warns when two tasks that
   could start now collide on a file, and `next` groups the ones that do not. Work outside the repo is said in
@@ -51,14 +52,18 @@ section gives it something it cannot get by looking:
 - **Goal:** one paragraph, the deliverable in concrete terms.
 - **Context:** the decisions it implements, by task id and decision number
   ("Outcome of Task 93: Q4, Q9"); the files and functions to read, with what
-  to look for in each; the traps you found while reading the code.
+  to look for in each; the traps you found while reading the code. A task
+  that changes what the user sees cites its approved design images by path
+  (under `Design refs`): implementer and verifier both work from them.
 - **Steps:** numbered, each one a change the session can finish and verify.
 - **Acceptance criteria:** checkable: a command that passes, an output that
   exists, a behaviour that can be observed.
-- **Manual check:** what the user will have to try by hand because tests
-  cannot prove it, as far as it can be foreseen (the implementing session
-  rewrites it at closing); `Nothing to check by hand.` when tests prove
-  everything.
+- **Verification:** what the Loop's verifier must see with the product
+  running, beyond what the suite proves: per acceptance criterion the state
+  to reach and the result to observe, the design images to compare. The
+  implementer rewrites it at closing, the verifier turns it into evidence.
+  Never steps for the user: what only the user could check is a real check
+  task of its own.
 - **Outcome:** `(to fill in)`. Decisions of a grilling and results of the
   work land here.
 - **When done:** the template's line, unchanged.
@@ -72,15 +77,19 @@ section gives it something it cannot get by looking:
 3. **Backend work starts without the design:** it depends on the decisions,
    never on the design task.
 4. **Real resources get their own task:** anything that spends paid tokens
-   or needs hardware or accounts is a `04_real-check` task at the end of the
-   chain, so every code task can finish unattended.
+   or needs what only the user has (another machine, an account, missing
+   hardware) is a `04_real-check` task at the end of the chain, so every code
+   task can finish, and be verified, unattended.
 5. **Docs travel with the behaviour:** the task that changes a behaviour
    updates its docs and vocabulary; a hard-to-reverse decision gets its own
    decision-record task at the head of the chain.
 6. **`Depends on`, `Who` and `Files` on every task** (`Files` may be `—`
    only in `01_to-grill`).
-7. **Every task ends with `## Manual check`.**
+7. **Every task ends with `## Verification`** (`## Manual check` in tasks
+   written before it, still accepted).
 8. **The parent closes at the split:** a task that was grilled and split has
    delivered its decisions. `move <id> done --note "closed <date>: decisions
    in Outcome, split into <id>a–<id>f"`, and its children cite its Outcome
    by id.
+9. **Learn from the Loop:** before writing tasks, read `tasks/LESSONS.md`;
+   a lesson marked `tasks` is a rule for how you cut and write them.
