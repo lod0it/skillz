@@ -1027,4 +1027,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # The board prints ●◆◇○▶: a Windows console in cp1252 cannot encode them.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")
     sys.exit(main())
