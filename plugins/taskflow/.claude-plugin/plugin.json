@@ -1,7 +1,7 @@
 {
   "name": "taskflow",
   "displayName": "Taskflow",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Break work down into self-contained tasks in a staged tasks/ pipeline (break-it-down), run them one at a time in fresh subagents (loop-it), and ask what to work on now (now-what).",
   "author": { "name": "Giuseppe Alfano" },
   "repository": "https://github.com/lod0it/skillz",

@@ -5,8 +5,11 @@ their transcripts at zero tokens.
     subagent_usage.py [--last N] [--project-dir DIR]
 
 Per subagent: the context it started from (system prompt, tools, first
-prompt), the peak context, the turns, the cache reads. `output_tokens` is
-partial in these files and is not reported. Standard library only.
+prompt), the peak context, the turns, the cache reads. The last line is the
+current context of the session running the Loop (the most recent top-level
+transcript): past 150k the Loop stops and asks for a fresh session.
+`output_tokens` is partial in these files and is not reported. Standard
+library only.
 """
 
 import argparse
@@ -16,6 +19,7 @@ import sys
 from pathlib import Path
 
 PEAK_WARN = 120_000  # above this the task was cut too large for one context window
+SESSION_WARN = 150_000  # above this the orchestrating session is too worn to go on
 
 
 def project_dir(cwd):
@@ -23,7 +27,7 @@ def project_dir(cwd):
 
 
 def read(path):
-    start = peak = turns = cache_read = 0
+    start = peak = turns = cache_read = current = 0
     model = prompt = ""
     seen = set()
     with open(path, encoding="utf-8") as lines:
@@ -46,12 +50,13 @@ def read(path):
                        + usage.get("cache_read_input_tokens", 0))
             start = start or context
             peak = max(peak, context)
+            current = context
             turns += 1
             cache_read += usage.get("cache_read_input_tokens", 0)
     meta = path.with_name(path.name.replace(".jsonl", ".meta.json"))
     agent = json.loads(meta.read_text(encoding="utf-8")).get("agentType", "?") if meta.is_file() else "?"
     return {"agent": agent, "model": model, "start": start, "peak": peak, "turns": turns,
-            "cache_read": cache_read, "prompt": " ".join(prompt.split())[:48]}
+            "cache_read": cache_read, "current": current, "prompt": " ".join(prompt.split())[:48]}
 
 
 def main(argv=None):
@@ -70,6 +75,12 @@ def main(argv=None):
         flag = "  <- peak over 120k: the task was too large" if row["peak"] > PEAK_WARN else ""
         print(f"{row['agent']:<16} {row['model']:<20} {row['start']:>7} {row['peak']:>8} {row['turns']:>5} "
               f"{row['cache_read']:>12}  {row['prompt']}{flag}")
+    sessions = sorted(folder.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
+    if sessions:
+        current = read(sessions[-1])["current"]
+        verdict = ("over 150k: stop the Loop, ask for /clear and a new /taskflow:loop-it"
+                   if current > SESSION_WARN else "ok")
+        print(f"this session's context: {current} ({verdict})")
     return 0
 
 

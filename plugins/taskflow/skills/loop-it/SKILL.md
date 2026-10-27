@@ -85,7 +85,11 @@ A lesson goes in `tasks/LESSONS.md` as one bullet: `- **<implementer | verifier 
 
 ## 6. Report each task
 
-Run `python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py --last <n>` for the subagents of this task (zero tokens: it reads their transcripts). Tell the user, in one short block: task id and title, commits, verdict (and the new task id on a failure), the start context, peak context and turns of each subagent, the lesson written if any, and the doubts the subagents reported, verbatim. Then, if the max number of tasks is not reached and no stop condition fired, go back to step 2.
+Run `python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py --last <n>` for the subagents of this task (zero tokens: it reads their transcripts). Tell the user, in one short block: task id and title, commits, verdict (and the new task id on a failure), the start context, peak context and turns of each subagent, the lesson written if any, and the doubts the subagents reported, verbatim.
+
+The script's last line is this session's own context. Past 150k the session is too worn to orchestrate well (it misreads reports, forgets earlier steps): that is a stop condition. Leave the checkout clean (commit the pipeline state if needed), write the closing summary, and end it with the restart: `/clear`, then `/taskflow:loop-it`. Everything the Loop needs is on disk (task files, lessons, git), so the fresh session resumes where this one stopped.
+
+Then, if the max number of tasks is not reached and no stop condition fired, go back to step 2.
 
 ## 7. Closing summary
 
@@ -93,7 +97,7 @@ Run `python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py --last <n>` for the subagents
 - **Needs the user:** grills (marking those the Loop sent back as blocked), design gates, real checks, verifications handed to the user. These are the agenda of the next session together.
 - **Lessons learned this run**, one line each.
 - **Process changes:** applied (one line each) and **to review** (the proposals of section 5).
-- The reason the loop stopped.
+- The reason the loop stopped (a worn session context included, with the restart commands).
 
 The loop pushes nothing and saves no session recap: both are the user's.
 
