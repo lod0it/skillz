@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/upgrade-repos/upgrade_repos.py\" hint 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/skills/upgrade-repos/upgrade_repos.py\" hint 2>/dev/null || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
