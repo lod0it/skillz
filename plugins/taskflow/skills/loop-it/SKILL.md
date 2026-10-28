@@ -2,7 +2,7 @@
 name: loop-it
 description: Implements and verifies the ready tasks of a staged `tasks/` pipeline in order, one fresh implementer and one fresh verifier subagent per task, turning each failure into a lesson the next subagent reads, until a stop condition. Use only when the user runs /taskflow:loop-it or picks "start the Loop" from the /taskflow:now-what menu; never on your own initiative.
 argument-hint: "[max tasks | task ids to run together | verify, default: until a stop condition]"
-allowed-tools: Read, Write, Edit, Agent, Bash(git status *), Bash(git log *), Bash(git show *), Bash(git add *), Bash(git commit *), Bash(git merge *), Bash(git worktree *), Bash(git branch *), Bash(git diff *), Bash(git -C *), Bash(taskflow *), Bash(python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py *)
+allowed-tools: Read, Write, Edit, Agent, TaskStop, SendMessage, Bash(git status *), Bash(git log *), Bash(git show *), Bash(git add *), Bash(git commit *), Bash(git merge *), Bash(git worktree *), Bash(git branch *), Bash(git diff *), Bash(git -C *), Bash(taskflow *), Bash(python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py *)
 ---
 
 Run the task loop on the current repo. `$ARGUMENTS` is the maximum number of tasks to complete in this invocation (empty means "until a stop condition"), a list of task ids to run together, as `/taskflow:now-what` recommends them ("start the Loop on 93b 89 76c"), or `verify` (only the verification backlog of section 2, no new work). Several ids, or several candidates with disjoint `Files`, mean the **parallel mode** of section 8; otherwise the serial flow of sections 1–7. Report to the user in the language of the conversation.
@@ -40,7 +40,7 @@ Agent tool, `subagent_type: implementer`, `model` from the task's Who, with this
 
 > Implement Task <ID>: `tasks/03_ready/<file>`. The repo is at <absolute repo path>.
 
-The profile already holds the reading list (lessons included), the closing procedure, the hard rules and the shape of the final answer: change them there, keep this prompt to the task. `Agent type 'implementer' not found` means this session started before the profile existed: stop and tell the user to start a fresh session. Wait for the completion notification; don't poll and don't start anything else meanwhile.
+The profile already holds the reading list (lessons included), the closing procedure, the hard rules and the shape of the final answer: change them there, keep this prompt to the task. `Agent type 'implementer' not found` means this session started before the profile existed: stop and tell the user to start a fresh session. Wait for the completion notification; don't poll and don't start anything else meanwhile. A notification that says the agent is "waiting on its own background work" while its report is complete (the commit exists) is final: go on with the checks and never wait for that agent again; section 6 stops it.
 
 Then the zero-token checks:
 
@@ -89,6 +89,8 @@ Run `python3 ${CLAUDE_SKILL_DIR}/subagent_usage.py --last <n>` for the subagents
 
 The script's last line is this session's own context. Past 150k the session is too worn to orchestrate well (it misreads reports, forgets earlier steps): that is a stop condition. Leave the checkout clean (commit the pipeline state if needed), write the closing summary, and end it with the restart: `/clear`, then `/taskflow:loop-it`. Everything the Loop needs is on disk (task files, lessons, git), so the fresh session resumes where this one stopped.
 
+**No agent outlives its task.** Once the task has its verdict (and, in parallel mode, its merge), stop with `TaskStop` every subagent of the task (implementer, repair, verifier) that has not notified "finished", then remove its worktree. An agent left alive with nothing to do holds its worktree lock, can wake up later on a stale tree, and makes the run look stuck. Before the closing summary, do the same for any agent still alive. An agent with no notification for longer than its task should take and no live process (no command in its worktree, nothing of it waiting on `taskflow exclusive`) is stalled: if its work is committed, stop it and go on with the checks; if not, send it one message to resume (`SendMessage`), and stop it if it stalls again.
+
 Then, if the max number of tasks is not reached and no stop condition fired, go back to step 2.
 
 ## 7. Closing summary
@@ -112,6 +114,6 @@ Used when the user names several ids or `next` offers several `loop` candidates 
    - `git merge --no-ff <branch> -m "Merge Task <ID>: <title>"`.
    - A conflict only in `TASKS.md`, `tasks/LESSONS.md` or a generated index: for the index take either side and run `taskflow index`; for the lessons keep both sides' bullets; then `taskflow check` and commit the merge. Two fix tasks that took the same new id: renumber the later one with `taskflow next-id` before committing. A conflict in any other file: `git merge --abort`, leave the worktree, stop and tell the user which files.
    - Run `taskflow exclusive "<Test command>"` on the merged checkout and `taskflow check`. Red → stop, no revert, no further merge: the user decides.
-   - On success remove the worktree and delete the branch (`git worktree remove`, `git branch -d`).
+   - On success stop the task's subagents still alive (section 6), then remove the worktree and delete the branch (`git worktree remove`, `git branch -d`).
 5. A task blocked or still failing after its repair is left in its worktree, with the subagent's explanation.
 6. Learn (section 5) from every task of the batch, report as in section 6, then the closing summary. Nothing is pushed.
