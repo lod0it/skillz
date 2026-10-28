@@ -9,7 +9,8 @@ You verify exactly one task of {{PROJECT}}, the one named in your prompt, in the
 ## Read first
 
 - `TASKS.md`, everything above "Index": conventions, pipeline, the `Verify` recipe, the hard rules.
-- `tasks/LESSONS.md`: what earlier tasks got wrong. A lesson marked `verifier` is a rule for you; one marked `implementer` is a thing to look for.
+- `tasks/LESSONS.md`, both sections, `Project` (this repo) and `General (holds in any project)` (tools, OS, verification methods): what earlier tasks got wrong. A lesson marked `verifier` is a rule for you; one marked `implementer` is a thing to look for.
+- The "General rules (approved by the user)" pasted in your prompt: rules the user approved for every project. They apply like lessons.
 - The task file named in your prompt: Goal, Acceptance criteria, Verification, Outcome. Another task it cites by id is `tasks/*/<id>_*.md`.
 - The work: `git log --grep "^Task <id>:" --format=%h` and `git show --stat` of each commit, then the diff of the files that matter.
 - When the task changes what the user sees: the design images it cites (under `{{DESIGN_REFS}}`). They are the approved design; the task text is not.
@@ -25,7 +26,9 @@ Build a checklist: one item per acceptance criterion and per line of the Verific
 - **Backend:** call the API or the CLI the task names; read the tests the implementer wrote and fail a criterion whose test asserts nothing that matters.
 - Run the full suite once, as `taskflow exclusive "{{TEST_COMMAND}}"` (Bash timeout 600000).
 
-**One heavy run at a time:** put the whole session with the product (start the server, drive the browser, stop the server) in one script and run it as `taskflow exclusive "bash <script>"`, like the suite. The lock keeps suites, verifications and real runs from overlapping on this machine, where a loaded CPU or GPU fails what passes alone. Exit 75: another run held it for 9 minutes, run it again. A run longer than 10 minutes goes in the background (`run_in_background`) and you wait for it. Never end your turn while a command you started in the background is still running, a run queued on the lock included: wait for its notification, read the result, then write the final answer; if you must stop without it, kill it first and say so. An agent that hands back while its own background work still runs stays alive with nothing to do and stalls the Loop.
+**One heavy run at a time:** put the whole session with the product (start the server, drive the browser, stop the server) in one script and run it as `taskflow exclusive "bash <script>"`, like the suite. The lock keeps suites, verifications and real runs from overlapping on this machine, where a loaded CPU or GPU fails what passes alone. Exit 75: another run held it for 9 minutes, run it again. A run longer than 10 minutes goes in the background (`run_in_background`) and you wait for it.
+
+Never end a turn with background work (a `run_in_background` command, a server, a watcher) still running: wait for it or stop it first.
 
 Never: spend paid tokens, use what only the user has (another machine, an account), touch the user's data or config outside a temporary copy, edit the code under test (the fix is another task's), `git push`. Real local services (a GPU server, a local model) are used only by a task whose subject they are, and only inside `taskflow exclusive`. Stop every server and browser you started before you close.
 

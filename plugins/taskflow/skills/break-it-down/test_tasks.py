@@ -2,6 +2,8 @@
 
 import contextlib
 import io
+import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -109,6 +111,78 @@ class InitTest(BoardCase):
         self.assertEqual(self.check()[0], 0)
 
 
+class LessonsTest(BoardCase):
+    OLD = ("# Lessons of the Loop\n\nRead by the implementer and the verifier before every task. "
+           "Written by the Loop (section 5 of loop-it).\n\n"
+           "- **implementer** a UI task cites frames → build from the image. (Task 33c, 2026-10-27)\n"
+           "- **verifier** a fresh browser asks who works → fill the name first. (Task 34c, 2026-10-27)\n"
+           "- **tasks** a probe and a fix → split them. (Task 16, 2026-10-28)\n")
+
+    def lessons(self):
+        return self.root / "tasks" / "LESSONS.md"
+
+    def test_init_creates_the_file_with_both_sections(self):
+        text = self.lessons().read_text(encoding="utf-8")
+        self.assertEqual(text, tasks.LESSONS_TEMPLATE)
+        self.assertIn("Written by the Loop (section 5 of loop-it) or by hand.", text)
+        self.assertIn("\n## Project\n", text)
+        self.assertIn("\n## General (holds in any project)\n", text)
+        self.assertLess(text.index("## Project"), text.index("## General"))
+
+    def test_init_never_overwrites_an_existing_file(self):
+        self.lessons().write_text(self.OLD, encoding="utf-8")
+        self.run_cmd("init")
+        self.assertEqual(self.lessons().read_text(encoding="utf-8"), self.OLD)
+
+    def test_check_warns_when_the_file_is_missing(self):
+        self.lessons().unlink()
+        code, out = self.check()
+        self.assertEqual(code, 0)
+        self.assertIn("WARN  tasks/LESSONS.md is missing", out)
+        self.assertIn("taskflow init", out)
+        self.assertIn("0 errors, 1 warnings", out)
+
+    def test_check_warns_when_the_sections_are_missing(self):
+        self.lessons().write_text(self.OLD, encoding="utf-8")
+        code, out = self.check()
+        self.assertEqual(code, 0)
+        self.assertIn("WARN  tasks/LESSONS.md lacks the `## Project` and `## General", out)
+        self.assertIn("taskflow migrate-tool", out)
+
+    def test_check_is_clean_with_both_sections(self):
+        self.assertEqual(self.check(), (0, "0 errors, 0 warnings\n"))
+
+    def test_migrate_puts_every_old_bullet_under_project(self):
+        self.lessons().write_text(self.OLD, encoding="utf-8")
+        code, out = self.run_cmd("migrate-tool")
+        self.assertEqual(code, 0)
+        self.assertIn("updated tasks/LESSONS.md", out)
+        text = self.lessons().read_text(encoding="utf-8")
+        preamble, rest = self.OLD.split("\n- ", 1)
+        self.assertEqual(text, preamble + "\n## Project\n\n- " + rest + "\n## General (holds in any project)\n")
+        project, general = text.split("## General (holds in any project)")
+        old_bullets = [line for line in self.OLD.splitlines() if line.startswith("- ")]
+        self.assertEqual([line for line in project.splitlines() if line.startswith("- ")], old_bullets)
+        self.assertEqual(general.strip(), "")
+        self.assertEqual(self.check(), (0, "0 errors, 0 warnings\n"))
+
+    def test_migrate_is_idempotent_on_lessons(self):
+        self.lessons().write_text(self.OLD, encoding="utf-8")
+        self.run_cmd("migrate-tool")
+        once = self.lessons().read_text(encoding="utf-8")
+        self.assertIn("nothing to migrate", self.run_cmd("migrate-tool")[1])
+        self.assertEqual(self.lessons().read_text(encoding="utf-8"), once)
+
+    def test_sections_adds_only_the_missing_heading(self):
+        text = "# Lessons\n\n## Project\n\n- **verifier** a → b. (Task 1, 2026-10-28)\n"
+        self.assertEqual(tasks.lessons_sections(text), text + "\n## General (holds in any project)\n")
+        self.assertEqual(tasks.lessons_sections(tasks.LESSONS_TEMPLATE), tasks.LESSONS_TEMPLATE)
+
+    def test_sections_on_a_title_only_file(self):
+        self.assertEqual(tasks.lessons_sections("# Lessons of the Loop\n"),
+                         "# Lessons of the Loop\n\n## Project\n\n## General (holds in any project)\n")
+
+
 class ParseTest(unittest.TestCase):
     def test_depends(self):
         self.assertEqual(tasks.parse_depends("Task 93a, Task 74c (same file)"), (["93a", "74c"], None))
@@ -200,8 +274,8 @@ class CheckTest(BoardCase):
         self.assertEqual(self.check()[0], 0)
 
     def test_closed_tasks_are_never_validated(self):
-        (self.root / "tasks" / "99_done" / "36b-one.md").write_text("# Task 36b: One\n**Status:** superseded\n")
-        (self.root / "tasks" / "99_done" / "36b-two.md").write_text("no header at all\n")
+        (self.root / "tasks" / "99_done" / "36b-one.md").write_text("# Task 36b: One\n**Status:** superseded\n", encoding="utf-8")
+        (self.root / "tasks" / "99_done" / "36b-two.md").write_text("no header at all\n", encoding="utf-8")
         self.run_cmd("index")
         self.assertEqual(self.check()[0], 0)
 
@@ -254,8 +328,8 @@ class MoveTest(BoardCase):
         self.run_cmd("move", "10", "done", "--note", "done; check failed, fixed by Task 12")
         self.run_cmd("move", "11", "99", "--rejected")
         done = self.root / "tasks" / "99_done"
-        self.assertIn("**Status:** [x] done; check failed, fixed by Task 12", (done / "10_first.md").read_text())
-        self.assertIn("**Status:** [-] rejected", (done / "11_idea.md").read_text())
+        self.assertIn("**Status:** [x] done; check failed, fixed by Task 12", (done / "10_first.md").read_text(encoding="utf-8"))
+        self.assertIn("**Status:** [-] rejected", (done / "11_idea.md").read_text(encoding="utf-8"))
         self.assertEqual(self.check()[0], 0)
 
     def test_same_stage_only_fixes_the_mark(self):
@@ -295,7 +369,7 @@ class AdoptAndSetTest(BoardCase):
     def test_adopt_renames_and_keeps_the_status_text(self):
         legacy = self.root / "tasks" / "to-be-tested"
         legacy.mkdir()
-        (legacy / "66-Mini-atures.md").write_text(task_text("66", mark="[x]", status="code done; browser pending"))
+        (legacy / "66-Mini-atures.md").write_text(task_text("66", mark="[x]", status="code done; browser pending"), encoding="utf-8")
         code, out = self.run_cmd("adopt", "tasks/to-be-tested/66-Mini-atures.md", "to-be-tested")
         self.assertEqual(code, 0, out)
         text = (self.root / "tasks" / "05_to-be-tested" / "66_mini_atures.md").read_text(encoding="utf-8")
@@ -304,9 +378,9 @@ class AdoptAndSetTest(BoardCase):
     def test_adopt_into_done_leaves_the_file_alone(self):
         legacy = self.root / "tasks" / "done"
         legacy.mkdir()
-        (legacy / "5-old.md").write_text("# Task 5: Old\n**Status:** finished\n")
+        (legacy / "5-old.md").write_text("# Task 5: Old\n**Status:** finished\n", encoding="utf-8")
         self.run_cmd("adopt", "tasks/done/5-old.md", "done")
-        self.assertEqual((self.root / "tasks" / "99_done" / "5-old.md").read_text(), "# Task 5: Old\n**Status:** finished\n")
+        self.assertEqual((self.root / "tasks" / "99_done" / "5-old.md").read_text(encoding="utf-8"), "# Task 5: Old\n**Status:** finished\n")
 
     def test_set_updates_the_file_and_the_index(self):
         self.add("ready", "10_first.md")
@@ -542,3 +616,151 @@ class BoardTest(BoardCase):
         self.chain()
         text = tasks.render_board(tasks.Board(self.root), 120, color=True)
         self.assertIn("\033[32m●\033[0m", text)
+
+
+class JsonTest(BoardCase):
+    """`--json` on status, board, next and checks: the schema of the README."""
+
+    TASK_KEYS = {"id", "title", "stage", "status", "type", "who", "depends_on", "waits_for", "files",
+                 "needs_user", "path"}
+
+    def fixture(self):
+        self.add("ready", "10_port.md", title="Port", files="`src/port.py`")
+        self.add("ready", "11_endpoint.md", title="Endpoint", depends="Task 10", files="`src/api.py`")
+        self.add("real-check", "12_printer.md", title="Printer", who="interactive", files="—")
+        self.add("ready", "13_print.md", title="Print", depends="Task 11, Task 12", files="`src/print.py`")
+        self.add("to-grill", "14_limits.md", title="Limits", files="—")
+        self.add("ready", "15_docs.md", title="Docs", files="`docs/`")
+        self.add("ready", "16_shared.md", title="Shared", files="`src/port.py`")
+        self.add("backlog", "17_later.md", title="Later", files="—")
+        self.add("ready", "18_csv.md", title="CSV", depends="Task 17", files="`src/csv.py`")
+        self.add("to-be-tested", "9_voice.md", title="Voice", mark="[~]", status="needs the user: a phone",
+                 manual="1. Open Home.\n2. Hold the mic.")
+        self.add("to-be-tested", "7_menu.md", title="Menü", mark="[~]", status="code done",
+                 manual="1. Open the menu.")
+        self.add("done", "8_old.md", title="Old", mark="[x]", status="done")
+        (self.root / "note.md").write_text("an idea\n", encoding="utf-8")
+        self.run_cmd("index")
+
+    def doc(self, *argv):
+        code, out = self.run_cmd(*argv, "--json")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        self.assertEqual(data["schema"], 1)
+        self.assertEqual(data["root"], str(self.root))
+        return data
+
+    def test_status(self):
+        self.fixture()
+        data = self.doc("status")
+        self.assertEqual(set(data), {"schema", "root", "stages", "done_count", "inbox_empty"})
+        self.assertEqual([s["folder"] for s in data["stages"]], [s.folder for s in tasks.OPEN_STAGES])
+        for stage in data["stages"]:
+            self.assertEqual(set(stage), {"folder", "name", "count", "ids"})
+            self.assertEqual(stage["count"], len(stage["ids"]))
+        by_name = {s["name"]: s for s in data["stages"]}
+        self.assertEqual(by_name["ready"]["ids"], ["10", "11", "13", "15", "16", "18"])
+        self.assertEqual(by_name["to-be-tested"]["ids"], ["7", "9"])
+        self.assertEqual(by_name["backlog"]["ids"], ["17"])
+        self.assertEqual(data["done_count"], 1)
+        self.assertIs(data["inbox_empty"], False)
+        text = self.run_cmd("status")[1]
+        for stage in data["stages"]:
+            ids = ", ".join(stage["ids"]) or "—"
+            self.assertRegex(text, rf"{stage['folder']}\s+{stage['count']}  {ids}\n")
+        (self.root / "note.md").write_text("\n", encoding="utf-8")
+        self.assertIs(self.doc("status")["inbox_empty"], True)
+
+    def test_board_matches_the_plain_board(self):
+        self.fixture()
+        data = self.doc("board")
+        self.assertEqual(set(data), {"schema", "root", "waves", "held", "loop_command"})
+        in_waves = [t for w in data["waves"] for t in w]
+        for task in in_waves:
+            self.assertEqual(set(task), self.TASK_KEYS | {"unlocks", "role"})
+        self.assertEqual(set(data["held"][0]), self.TASK_KEYS | {"unlocks", "role", "why_held"})
+        self.assertEqual([[t["id"] for t in w] for w in data["waves"]],
+                         [["10", "12", "14", "15", "16"], ["11"], ["13"]])
+        self.assertEqual({t["id"]: t["role"] for t in in_waves},
+                         {"10": "loop", "12": "user", "14": "grill", "15": "loop", "16": "loop",
+                          "11": "loop", "13": "loop"})
+        port = data["waves"][0][0]
+        self.assertEqual(port["unlocks"], ["11", "13"])
+        self.assertEqual(port["path"], "tasks/03_ready/10_port.md")
+        self.assertEqual(port["stage"], "ready")
+        self.assertEqual(port["status"], "not started")
+        self.assertEqual(data["waves"][2][0]["depends_on"], ["11", "12"])
+        self.assertEqual(data["waves"][2][0]["waits_for"], ["11", "12"])
+        self.assertEqual([(t["id"], t["why_held"]) for t in data["held"]], [("18", "17 in backlog")])
+        self.assertEqual(data["loop_command"], "/taskflow:loop-it 10 15")
+
+        text = self.run_cmd("board", "--plain", "--width", "160")[1]
+        labels = ["NOW"] + [f"AFTER {i}" for i in range(1, len(data["waves"]))]
+        heads = r"\s+│ ".join(rf"{label} \({len(w)}\)" for label, w in zip(labels, data["waves"]))
+        self.assertRegex(text.splitlines()[2], rf"^{heads}$")
+        for task in in_waves:
+            released = len(task["unlocks"])
+            tail = rf"\s+▶{released}" if released else r" *(?:│|$)"
+            self.assertRegex(text, re.compile(rf"[●◆◇○] {task['id']} {re.escape(task['title'])}{tail}", re.M))
+        for task in data["held"]:
+            self.assertIn(f"Held:       {task['id']} {task['title']} ← {task['why_held']}", text)
+        self.assertIn(f"Loop now:   {data['loop_command']}  (then 16: same files)", text)
+
+    def test_board_without_loopable_work(self):
+        self.add("to-grill", "14_limits.md", title="Limits", files="—")
+        data = self.doc("board")
+        self.assertIsNone(data["loop_command"])
+        self.assertEqual(data["held"], [])
+        self.assertEqual(self.doc("board", "--plain")["waves"][0][0]["role"], "grill")
+
+    def test_next(self):
+        self.fixture()
+        data = self.doc("next")
+        self.assertEqual(set(data), {"schema", "root", "ready", "groups"})
+        self.assertEqual([t["id"] for t in data["ready"]], ["10", "15", "16"])
+        for task in data["ready"]:
+            self.assertEqual(set(task), self.TASK_KEYS)
+        self.assertEqual(data["ready"][0]["files"], ["src/port.py"])
+        self.assertEqual(data["groups"], [["10", "15"], ["16"]])
+        self.assertIn("side by side in separate worktrees: [10, 15]  [16]", self.run_cmd("next")[1])
+
+    def test_checks(self):
+        self.fixture()
+        data = self.doc("checks")
+        self.assertEqual(set(data), {"schema", "root", "checks"})
+        for item in data["checks"]:
+            self.assertEqual(set(item), {"id", "title", "verification", "needs_user"})
+        self.assertEqual([(c["id"], c["title"], c["needs_user"]) for c in data["checks"]],
+                         [("7", "Menü", False), ("9", "Voice", True)])
+        self.assertEqual(data["checks"][1]["verification"], "1. Open Home.\n2. Hold the mic.")
+        self.add("to-be-tested", "6_bare.md", mark="[~]", manual="x", heading="Notes")
+        self.assertIsNone(self.doc("checks")["checks"][0]["verification"])
+
+    def test_empty_board(self):
+        self.assertEqual(self.doc("checks")["checks"], [])
+        self.assertEqual(self.doc("next"), {"schema": 1, "root": str(self.root), "ready": [], "groups": []})
+        self.assertEqual(self.doc("board")["waves"], [])
+
+    def test_errors_are_json_with_the_same_exit_codes(self):
+        bad = self.root / "tasks" / "03_ready" / "10_bad.md"
+        bad.write_bytes(b"# Task 10: bad \xff\n")
+        code, out = self.run_cmd("status", "--json")
+        self.assertEqual(code, 1)
+        self.assertEqual(set(json.loads(out)), {"schema", "error"})
+        with self.assertRaises(UnicodeDecodeError):
+            self.run_cmd("status")
+        bad.unlink()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                tasks.main(["--root", str(self.root), "status", "--json", "--nope"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("--nope", json.loads(out.getvalue())["error"])
+
+    def test_from_the_shell_the_output_is_utf8(self):
+        self.fixture()
+        script = Path(tasks.__file__).resolve()
+        done = subprocess.run([sys.executable, str(script), "--root", str(self.root), "checks", "--json"],
+                              capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(json.loads(done.stdout.decode("utf-8"))["checks"][0]["title"], "Menü")

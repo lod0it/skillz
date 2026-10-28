@@ -38,6 +38,10 @@ Run `check` and act on what it prints:
 - **`OLD-TOOL` lines** → run `migrate-tool`, tell the user which files it
   changed, then `check` again. The full migration of [migrate.md](migrate.md)
   is not needed.
+- **A `tasks/LESSONS.md` warning** (a warning, not an error) → missing: run
+  `init`, which creates it with its two sections; no `## Project` / `## General`
+  headings: run `migrate-tool`, which adds them and leaves the old bullets,
+  untouched, under Project.
 - **Any other error** → fix the mechanical ones (`index`, `move <id> <its
   stage>`, a header field with `set`) and report the rest to the user.
 
@@ -56,6 +60,16 @@ the user.
 
 Every branch that writes or rewrites a task file follows
 [task-format.md](task-format.md).
+
+Before cutting or writing any task, read `tasks/LESSONS.md`, both sections:
+**Project** (lessons that name something of this repo) and **General (holds
+in any project)** (tool, OS and verification-method lessons that hold
+everywhere). A lesson marked `tasks` in either is a rule for how you cut and
+write them. A lesson you add (the `checks` branch does) keeps the Loop's
+bullet format and goes under General when it names nothing of this project
+(a Windows / Git Bash / uv / Playwright / Electron quirk, a verification
+method), under Project otherwise; a General lesson is still concrete (a tool,
+a command, a symptom), never vague.
 
 ## 3. Close
 
