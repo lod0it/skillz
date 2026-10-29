@@ -12,10 +12,15 @@ them). For each entry look for a task that already covers it: the Index of
 
 ## 2. Propose one outcome per entry
 
-Show one table, every entry on a row, with one of three outcomes:
+Show one table, every entry on a row, with one of four outcomes:
 
-- **New task:** stage, Type, title, Depends on. Small and already clear
-  goes to `03_ready`; anything with a decision in it is a to-grill stub.
+- **Do it right away:** small, already clear, no decision in it (rule 10 of
+  [task-format.md](task-format.md)). No task is written; if the user accepts,
+  do it inline or hand it to the Loop, and if they decline it becomes a
+  New task.
+- **New task:** stage, Type, title, Depends on. Clear but bigger than a quick
+  change goes to `03_ready`; anything with a decision in it is a to-grill
+  stub. Sized by rule 1 of task-format.md: split it now if it is too big.
 - **Add to Task N:** the entry is a detail or a constraint of an open task.
 - **Stays in the inbox:** with the reason.
 

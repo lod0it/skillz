@@ -70,7 +70,14 @@ section gives it something it cannot get by looking:
 
 ## Cutting work into tasks
 
-1. **One context window, one verifiable deliverable** per task.
+1. **One context window, one verifiable deliverable** per task. A subagent
+   that runs past 150k of context is a rare event, and when it happens the
+   cut was wrong: size the work while you grill, not after. More than 8
+   `Files`, or more than 3 distinct areas (a screen, a service, the IPC
+   layer, the tests, the docs), is too much for one task: split it now, along
+   seams that keep each piece verifiable alone (data and service first, the
+   UI on top) and its `Files` disjoint from the others where possible. Never
+   write an oversized task meaning to cut it later.
 2. **Design first for UI:** when the repo declares a Design gate and the
    work changes what the user sees, a design task comes first and the UI
    task depends on it.
@@ -93,3 +100,10 @@ section gives it something it cannot get by looking:
    by id.
 9. **Learn from the Loop:** before writing tasks, read `tasks/LESSONS.md`;
    a lesson marked `tasks` is a rule for how you cut and write them.
+10. **Not everything is a task:** a change with no open decision (the way
+    is obvious, nothing to design, one area, one or two files, nothing new to
+    check by eye) costs more as a task (file, implementer, verifier) than as
+    the change itself. Do not write it: offer the user to do it right away,
+    inline or by handing it to the Loop, and write a task only when they
+    decline. Say so once per round, listing the candidates, so the pipeline
+    does not fill with tiny tasks.

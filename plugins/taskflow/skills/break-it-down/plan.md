@@ -7,7 +7,10 @@ Turn a design or plan document into tasks.
    restate.
 2. **Cut** along the plan's deliverable boundaries, by the rules of
    [task-format.md](task-format.md). A part the plan marks exploratory or
-   optional becomes its own task at the end and blocks nothing.
+   optional becomes its own task at the end and blocks nothing. Size each
+   task by rule 1 of task-format.md (8 files, 3 areas) and offer to do the
+   decision-free changes right away instead of writing tasks for them
+   (rule 10).
 3. **Send undecided parts to `01_to-grill`** as stubs: a part where you
    would have to guess what the user wants is a decision, and guesses
    written into Steps read as decisions to the next session.

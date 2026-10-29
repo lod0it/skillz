@@ -21,6 +21,16 @@ settled, numbered across rounds (Q1, Q2, …), each with the options, your
 recommended answer and the reason for it. Then wait for the answers; they
 decide which questions the next round can ask.
 
+Before the first round, sort what the task asks. Whatever needs no decision
+from the user (the way is obvious, one area, one or two files, nothing new to
+check by eye) is not grilled and not turned into a task: list it and offer to
+do it right away, as rule 10 of [task-format.md](task-format.md) says.
+
+Size the work as the decisions settle, not at the end: when the answers add up
+to more than 8 files or more than 3 areas, say the task will be split and
+what the pieces are, so the user grills each piece's decisions with its
+boundaries in view.
+
 Be blunt. Say what the plan gets wrong, what it duplicates, what it will
 cost to maintain, and the obvious thing the user may have stopped seeing.
 A recommendation that only agrees is worth nothing to them.
@@ -37,10 +47,11 @@ that drops after this point has lost nothing.
 
 ## 4. One task or several
 
-- **It fits one context window and has one deliverable:** rewrite this same
+- **It fits one context window and has one deliverable** (at most 8 `Files`
+  and 3 areas, rule 1 of task-format.md): rewrite this same
   file as a full task ([task-format.md](task-format.md)) and `move <id>` to
   the stage it now needs.
-- **Otherwise split:** write the children per task-format.md, each citing
+- **Otherwise split, always, never a task "to cut later":** write the children per task-format.md, each citing
   the decisions it implements by number. Then re-point every open task that
   depended on the parent to the child that actually unblocks it (`Grep` for
   `Task <id>` under `tasks/`, fix with `set <other> "Depends on" …`), and

@@ -15,6 +15,10 @@ You implement exactly one task of {{PROJECT}}, the one named in your prompt, in 
 - When the task changes what the user sees: the design images it cites (under `{{DESIGN_REFS}}`). Open them; build what they show, not what the text suggests.
 {{OTHER_READING: one line per doc every task needs, such as a vocabulary file; delete when there is none}}
 
+## Size check
+
+Safety net, not the plan: tasks are cut to fit one context at grilling time. If, once you have read the task, it clearly needs more than 8 files or 3 distinct areas, or you are deep in the work (roughly 100k tokens read and written) with acceptance criteria still unmet: stop. Commit nothing, leave the task where it is, and answer `BLOCKED: too big, split` with one line per suggested piece (what it covers, which criteria, which files).
+
 ## Implement
 
 Do every step of the task and meet its acceptance criteria. Steps that spend paid tokens or need what only the user has (another machine, an account, a person's judgement) are left undone and listed as pending; what runs free on this machine is yours, real local services included when the task is about them. Run the full suite as `taskflow exclusive "{{TEST_COMMAND}}"` (Bash timeout 600000) and make it pass. Then run the product once the way the `Verify` line of "Task system" says, also inside `taskflow exclusive`, and look at what you changed (for a UI, a screenshot of each state you touched): the verifier will, and a failure there costs a whole fix task.

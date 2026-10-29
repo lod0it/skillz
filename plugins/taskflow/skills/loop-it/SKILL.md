@@ -58,7 +58,7 @@ The profile already holds the reading list (lessons included), the closing proce
 
 Then the zero-token checks:
 
-- **Blocked** (the subagent says a decision only the user can make is missing; nothing committed): `taskflow move <id> to-grill --note "blocked: <the question, one line>"`, commit `Task <id>: back to grill`, and continue with the next task. The user finds the question among the morning's grills.
+- **Blocked** (the subagent says a decision only the user can make is missing; nothing committed): `taskflow move <id> to-grill --note "blocked: <the question, one line>"`, commit `Task <id>: back to grill`, and continue with the next task. The user finds the question among the morning's grills. An answer `BLOCKED: too big, split` is handled the same way, with `--note "blocked: too big, split: <the suggested pieces, one line>"`, and it is also a `tasks` lesson (section 5): the breakdown should have split it at grilling time.
 - `git log -1 --format=%s` starts with `Task <ID>:`, `git status --porcelain --untracked-files=no` is empty, `taskflow exclusive "<Test command>"` exits 0 (read only the last 3 lines of its output), `taskflow check` prints `0 errors`, and the task file is in `tasks/05_to-be-tested/`.
 - One of these fails: dispatch **one** repair, `subagent_type: implementer`, same model, prompt `Task <ID> is committed but <what failed: the last lines of the suite, the dirty files, the check error>. Fix it so that the checks pass, and amend nothing: commit the fix as "Task <ID>: fix <what>".` Checks again; still failing → stop: the checkout is not a base the next task can build on.
 
