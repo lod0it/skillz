@@ -8,7 +8,7 @@
     {
       "name": "taskflow",
       "source": "./plugins/taskflow",
-      "description": "break-it-down + loop-it + now-what: staged tasks/ pipeline, a one-subagent-per-task runner and a read-only what-next analysis."
+      "description": "break-it-down + loop-it + now-what + upgrade-repos + free-my-context: staged tasks/ pipeline, a one-subagent-per-task runner, a read-only what-next analysis and a guided trim of the resident context."
     },
     {
       "name": "residency",
