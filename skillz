@@ -39,7 +39,9 @@ MARKETPLACE = "skillz"
 SCOPES = ("user", "project", "local")
 BIN_DIR = Path.home() / ".local" / "bin"
 # plugin -> command linked into BIN_DIR (target: the stable repo path)
-COMMANDS = {"residency": "plugins/residency/bin/residency"}
+COMMANDS = {"statusline": "plugins/statusline/bin/statusline"}
+# plugin whose install also sets `statusLine` in settings.json
+STATUSLINE = "statusline"
 
 
 # ---------- helpers ----------
@@ -65,7 +67,7 @@ def save_json(path, data):
 
 def load_state():
     s = load_json(STATE, {})
-    for k in ("skills", "plugins", "overrides", "links"):
+    for k in ("skills", "plugins", "overrides", "links", "statusline"):
         s.setdefault(k, {})
     s.setdefault("marketplace_added", False)
     return s
@@ -73,7 +75,7 @@ def load_state():
 
 def save_state(state):
     empty = not (state["skills"] or state["plugins"] or state["overrides"]
-                 or state["links"] or state["marketplace_added"])
+                 or state["links"] or state["statusline"] or state["marketplace_added"])
     if empty:
         STATE.unlink(missing_ok=True)
     else:
@@ -83,7 +85,8 @@ def save_state(state):
 def claude(*args):
     if not shutil.which("claude"):
         die("`claude` CLI not found in PATH (needed for plugins)")
-    return subprocess.run(["claude", *args], capture_output=True, text=True)
+    return subprocess.run(["claude", *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 def claude_or_die(*args):
@@ -164,10 +167,23 @@ def command_status(plugin):
     """linked | free | conflict | None (plugin has no command)"""
     if plugin not in COMMANDS:
         return None
+    if plugin == STATUSLINE and os.name == "nt":
+        return None  # Windows runs the plugin's .cmd in place: no symlink needed
     dst = BIN_DIR / plugin
     if os.path.islink(dst) and os.path.realpath(dst) == os.path.realpath(REPO / COMMANDS[plugin]):
         return "linked"
     return "conflict" if os.path.lexists(dst) else "free"
+
+
+def statusline_entry():
+    """The command Claude Code runs: the linked entry (POSIX) or the .cmd in place (Windows)."""
+    if os.name == "nt":
+        return str(REPO / "plugins" / STATUSLINE / "bin" / "statusline.cmd")
+    return str(BIN_DIR / STATUSLINE)
+
+
+def statusline_want():
+    return {"type": "command", "command": statusline_entry()}
 
 
 def on_path(d):
@@ -349,6 +365,17 @@ def cmd_install(a):
             plan.append((f"link command {BIN_DIR / p} -> {REPO / COMMANDS[p]}",
                          lambda p=p: install_command(state, p)))
 
+    if STATUSLINE in selected:
+        cur = load_json(SETTINGS, {}).get("statusLine")
+        if cur == statusline_want():
+            print("skip   statusLine: already set")
+        elif cur is not None and not a.force:
+            print(f"skip   statusLine: {SETTINGS} already has a different one "
+                  "(use --force to replace)")
+        else:
+            plan.append((f"set statusLine in {SETTINGS} (backup first)",
+                         lambda: install_statusline(state)))
+
     # overrides
     want = override_map()
     do_ov = a.overrides
@@ -413,6 +440,18 @@ def install_command(state, name):
         print(f"warn   {BIN_DIR} is not on $PATH: add it to your shell profile")
 
 
+def install_statusline(state):
+    settings = load_json(SETTINGS, {})
+    prev = settings.get("statusLine")
+    if SETTINGS.exists():
+        shutil.copy2(SETTINGS, f"{SETTINGS}.bak-{time.strftime('%Y%m%d%H%M%S')}")
+    settings["statusLine"] = statusline_want()
+    save_json(SETTINGS, settings)
+    state["statusline"] = {"prev": prev}
+    save_state(state)
+    print(f"set statusLine in {SETTINGS}")
+
+
 def install_overrides(state, todo):
     settings = load_json(SETTINGS, {})
     cur = settings.setdefault("skillOverrides", {})
@@ -457,6 +496,9 @@ def cmd_uninstall(a):
                          lambda p=p: uninstall_command(state, p)))
         elif p in state["links"]:
             print(f"skip   command {p}: {state['links'][p]} is no longer our symlink")
+    if STATUSLINE in chosen and "prev" in state["statusline"]:
+        plan.append((f"remove statusLine from {SETTINGS} (backup first)",
+                     lambda: uninstall_statusline(state)))
     if a.remove_marketplace or (chosen and not (set(cand) - set(chosen))
                                 and marketplace_registered()
                                 and ask_yes_no(f"\nAlso remove marketplace '{MARKETPLACE}'?", False)):
@@ -507,6 +549,23 @@ def remove_marketplace(state):
     state["marketplace_added"] = False
     save_state(state)
     print(f"removed marketplace {MARKETPLACE}")
+
+
+def uninstall_statusline(state):
+    settings = load_json(SETTINGS, {})
+    prev = state["statusline"].pop("prev", None)
+    if settings.get("statusLine") != statusline_want():
+        print("keep   statusLine: changed since install, left as is")
+    else:
+        if SETTINGS.exists():
+            shutil.copy2(SETTINGS, f"{SETTINGS}.bak-{time.strftime('%Y%m%d%H%M%S')}")
+        if prev is None:
+            del settings["statusLine"]
+        else:
+            settings["statusLine"] = prev
+        save_json(SETTINGS, settings)
+        print("removed statusLine")
+    save_state(state)
 
 
 def uninstall_overrides(state):

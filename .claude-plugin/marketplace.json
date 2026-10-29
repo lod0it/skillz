@@ -11,11 +11,6 @@
       "description": "break-it-down + loop-it + now-what + upgrade-repos + free-my-context: staged tasks/ pipeline, a one-subagent-per-task runner, a read-only what-next analysis and a guided trim of the resident context."
     },
     {
-      "name": "residency",
-      "source": "./plugins/residency",
-      "description": "residency command: zero-token terminal tool to see and trim resident context. No skills."
-    },
-    {
       "name": "statusline",
       "source": "./plugins/statusline",
       "description": "statusline command: zero-token Claude Code status line (session and weekly limits) that also saves the limits to ~/.claude/statusline/rate_limits.json. No skills."
