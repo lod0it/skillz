@@ -42,22 +42,59 @@ def parse_limits(doc):
     return parse_window(rl.get("five_hour")), parse_window(rl.get("seven_day"))
 
 
-def _reset(epoch, fmt):
+def parse_context(doc):
+    """-> the used share of the context window in percent, or None."""
+    cw = doc.get("context_window") if isinstance(doc, dict) else None
+    if not isinstance(cw, dict):
+        return None
+    if _num(cw.get("used_percentage")):
+        return cw["used_percentage"]
+    usage, size = cw.get("current_usage"), cw.get("context_window_size")
+    if not isinstance(usage, dict) or not _num(size) or size <= 0:
+        return None
+    used = sum(usage[k] for k in ("input_tokens", "cache_creation_input_tokens",
+                                  "cache_read_input_tokens") if _num(usage.get(k)))
+    return used * 100 / size
+
+
+def color(pct):
+    """-> the SGR prefix for the rounded percentage ("" under NO_COLOR)."""
+    if os.environ.get("NO_COLOR"):
+        return ""
+    n = round(pct)
+    return "[1;32m" if n < 60 else "[1;33m" if n <= 85 else "[1;31m"
+
+
+def paint(pct):
+    """-> "N%" with the traffic-light color on it."""
+    c = color(pct)
+    return f"{c}{round(pct)}%[0m" if c else f"{round(pct)}%"
+
+
+def countdown(resets_at, now):
+    """-> time left to resets_at: "Nm", "Hh Mm" or "Dd Hh"."""
+    minutes = int(max(0, resets_at - now) // 60)
+    if minutes < 60:
+        return f"{minutes}m"
+    if minutes < 24 * 60:
+        return f"{minutes // 60}h {minutes % 60}m"
+    return f"{minutes // 1440}d {minutes % 1440 // 60}h"
+
+
+def _segment(label, w, now):
     try:
-        return time.strftime(fmt, time.localtime(epoch))
-    except (OverflowError, OSError, ValueError):
-        return "?"
-
-
-def _segment(label, w, fmt):
-    return f"{label} {round(w['used_percentage'])}% · resets {_reset(w['resets_at'], fmt)}"
+        left = countdown(w["resets_at"], now)
+    except (OverflowError, ValueError):
+        left = "?"
+    return f"{label} {paint(w['used_percentage'])} ⟳ {left}"
 
 
 def _text(v):
     return v if isinstance(v, str) else ""
 
 
-def format_line(doc):
+def format_line(doc, now=None):
+    now = time.time() if now is None else now
     doc = doc if isinstance(doc, dict) else {}
     model = doc.get("model")
     name = _text(model.get("display_name")) if isinstance(model, dict) else _text(model)
@@ -67,11 +104,14 @@ def format_line(doc):
     folder = os.path.basename(cwd.replace("\\", "/").rstrip("/"))
     head = " · ".join(x for x in (name, folder) if x)
     five, seven = parse_limits(doc)
+    ctx = parse_context(doc)
     parts = [head] if head else []
+    if ctx is not None:
+        parts.append(f"ctx {paint(ctx)}")
     if five:
-        parts.append(_segment("session", five, "%H:%M"))
+        parts.append(_segment("session", five, now))
     if seven:
-        parts.append(_segment("week", seven, "%a %H:%M"))
+        parts.append(_segment("week", seven, now))
     return " │ ".join(parts) or "claude"
 
 

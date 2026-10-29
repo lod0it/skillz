@@ -1,8 +1,8 @@
 {
   "name": "statusline",
   "displayName": "Statusline",
-  "version": "0.1.0",
-  "description": "Zero-token status line for Claude Code: session and weekly usage with reset times, saved to ~/.claude/statusline/rate_limits.json for other tools. Ships a command only, no skills.",
+  "version": "0.2.0",
+  "description": "Zero-token status line for Claude Code: session and weekly usage with time to reset, saved to ~/.claude/statusline/rate_limits.json for other tools. Ships a command only, no skills.",
   "author": { "name": "Giuseppe Alfano" },
   "repository": "https://github.com/lod0it/skillz",
   "keywords": ["statusline", "usage", "limits"]

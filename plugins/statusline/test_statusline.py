@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,13 @@ FULL = {
 }
 
 
+def plain(s):
+    return re.sub(r"\[[0-9;]*m", "", s)
+
+
+G, Y, R = "[1;32m", "[1;33m", "[1;31m"
+
+
 class StatuslineTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -35,8 +43,7 @@ class StatuslineTest(unittest.TestCase):
         line = statusline.run(json.dumps(FULL))
         self.assertIn("Opus", line)
         self.assertIn("proj", line)
-        self.assertIn("session 42% · resets ", line)
-        self.assertIn("week 18% · resets ", line)
+        self.assertRegex(plain(line), r"session 42% ⟳ .+ │ week 18% ⟳ ")
         data = json.loads(self.file.read_text(encoding="utf-8"))
         self.assertEqual(data["schema"], 1)
         self.assertEqual(data["session_id"], "abc-123")
@@ -64,27 +71,80 @@ class StatuslineTest(unittest.TestCase):
     def test_partial_limits_do_not_write(self):
         doc = dict(FULL, rate_limits={"five_hour": FULL["rate_limits"]["five_hour"]})
         line = statusline.run(json.dumps(doc))
-        self.assertIn("session 42%", line)
+        self.assertIn("session 42%", plain(line))
         self.assertNotIn("week", line)
         self.assertFalse(self.file.exists())
 
+    def test_context_share(self):
+        doc = dict(FULL, context_window={"used_percentage": 37.4})
+        self.assertIn("Opus · proj │ ctx 37% │ session 42%", plain(statusline.run(json.dumps(doc))))
+        derived = dict(FULL, context_window={
+            "context_window_size": 200000,
+            "current_usage": {"input_tokens": 1000, "cache_creation_input_tokens": 9000,
+                              "cache_read_input_tokens": 40000, "output_tokens": 5}})
+        self.assertIn("ctx 25%", plain(statusline.run(json.dumps(derived))))
+        for cw in (None, {}, {"used_percentage": None}, {"context_window_size": 0, "current_usage": {}}):
+            self.assertNotIn("ctx", statusline.run(json.dumps(dict(FULL, context_window=cw))))
+
+    def test_color_thresholds(self):
+        env = {k: v for k, v in os.environ.items() if k != "NO_COLOR"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            for pct, c in ((0, G), (59, G), (59.4, G), (59.6, Y), (60, Y), (85, Y),
+                           (85.4, Y), (85.6, R), (86, R), (100, R)):
+                self.assertEqual(statusline.paint(pct), f"{c}{round(pct)}%[0m", pct)
+
+    def test_no_color(self):
+        with mock.patch.dict(os.environ, {"NO_COLOR": "1"}):
+            self.assertEqual(statusline.paint(70), "70%")
+            doc = dict(FULL, context_window={"used_percentage": 90})
+            self.assertNotIn("", statusline.run(json.dumps(doc)))
+        with mock.patch.dict(os.environ, {"NO_COLOR": ""}):
+            self.assertIn("", statusline.paint(70))
+
+    def test_countdown(self):
+        for left, want in ((-500, "0m"), (0, "0m"), (59, "0m"), (59 * 60 + 59, "59m"),
+                           (3600, "1h 0m"), (6000, "1h 40m"), (7200, "2h 0m"),
+                           (86399, "23h 59m"), (86400, "1d 0h"),
+                           (4 * 86400 + 16 * 3600, "4d 16h")):
+            self.assertEqual(statusline.countdown(1000 + left, 1000), want, left)
+
+    def test_spec_line(self):
+        now = 1_800_000_000
+        doc = {"model": {"display_name": "Opus"}, "workspace": {"current_dir": "/a/skillz_lab"},
+               "context_window": {"used_percentage": 37},
+               "rate_limits": {"five_hour": {"used_percentage": 65, "resets_at": now + 6000},
+                               "seven_day": {"used_percentage": 14,
+                                             "resets_at": now + 4 * 86400 + 16 * 3600}}}
+        env = {k: v for k, v in os.environ.items() if k != "NO_COLOR"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            line = statusline.format_line(doc, now)
+        self.assertEqual(plain(line), "Opus · skillz_lab │ ctx 37% │ session 65% ⟳ 1h 40m │ week 14% ⟳ 4d 16h")
+        self.assertIn(f"ctx {G}37%", line)
+        self.assertIn(f"session {Y}65%", line)
+        self.assertIn(f"week {G}14%", line)
+
+    def test_file_keys_unchanged(self):
+        statusline.run(json.dumps(FULL))
+        data = json.loads(self.file.read_text(encoding="utf-8"))
+        self.assertEqual(list(data), ["schema", "updated_at", "session_id", "five_hour", "seven_day"])
+
     def test_malformed_never_raises(self):
         for raw in ("", "not json", "[1]", "null", '{"rate_limits": 5}',
-                    '{"model": 3, "workspace": []}',
+                    '{"model": 3, "workspace": []}', '{"context_window": 7}',
                     '{"rate_limits": {"five_hour": {"used_percentage": "x"}}}'):
             self.assertIsInstance(statusline.run(raw), str, raw)
         self.assertFalse(self.file.exists())
 
     def test_unwritable_dir_still_prints(self):
         with mock.patch.object(statusline, "write_limits", side_effect=OSError):
-            self.assertIn("session 42%", statusline.run(json.dumps(FULL)))
+            self.assertIn("session 42%", plain(statusline.run(json.dumps(FULL))))
 
     def test_entry_point_process(self):
         r = subprocess.run([sys.executable, str(HERE / "statusline.py")],
                            input=json.dumps(FULL).encode(), capture_output=True,
                            env={**os.environ, "CLAUDE_CONFIG_DIR": self.tmp.name})
         self.assertEqual(r.returncode, 0)
-        self.assertIn("session 42%", r.stdout.decode("utf-8"))
+        self.assertIn("session 42%", plain(r.stdout.decode("utf-8")))
         self.assertTrue(self.file.exists())
         r = subprocess.run([sys.executable, str(HERE / "statusline.py")],
                            input=b"\xff\xfe garbage", capture_output=True)
