@@ -60,6 +60,22 @@ class UpgradeReposTest(unittest.TestCase):
         self.assertEqual(up.git(repo, "status", "--porcelain")[1], "")
         self.assertIn("taskflow: upgrade", up.git(repo, "log", "-1", "--format=%s")[1])
 
+    def test_profiles_get_the_style_rule_once(self):
+        repo = make_repo(self.root, "prof", lessons=up.tasks.LESSONS_TEMPLATE, git=False)
+        agents = repo / ".claude" / "agents"
+        agents.mkdir(parents=True)
+        (agents / "implementer.md").write_text(
+            "Write its `## Outcome`. Change.\n\n## Final answer\n\nAt most 15 lines, in English: what changed.\n", encoding="utf-8")
+        (agents / "verifier.md").write_text("Custom profile, no final answer line.\n", encoding="utf-8")
+        self.assertEqual(up.assess(repo)["state"], "auto")
+        up.apply_repo(repo)
+        impl = (agents / "implementer.md").read_text(encoding="utf-8")
+        self.assertIn("At most 15 lines, in English, in ASD-STE100 style (", impl)
+        self.assertIn("): what changed.", impl)
+        self.assertIn("Write both in ASD-STE100 style.", impl)
+        self.assertIn("Write your final answer in ASD-STE100", (agents / "verifier.md").read_text(encoding="utf-8"))
+        self.assertEqual(up.assess(repo)["state"], "ok")
+
     def test_apply_without_commit_leaves_changes(self):
         repo = make_repo(self.root, "old")
         self.assertEqual(up.apply_repo(repo)[0], "upgraded")

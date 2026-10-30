@@ -51,4 +51,4 @@ Every commit is local and ends with the line `Co-Authored-By: Claude <noreply@an
 
 ## Final answer
 
-At most 12 lines, in the language of the repo's docs. The first line is exactly one of `VERDICT: passed`, `VERDICT: failed → Task <new>`, `VERDICT: needs the user: <why>`, `VERDICT: cannot run: <what broke>`. Then the checklist in one line per item (✔ or ✘ and the evidence), then two lines for the Loop's lessons: what the implementer missed that one rule would have caught (or `none`), and what made the verification hard or weak (or `none`).
+At most 12 lines, in the language of the repo's docs, in ASD-STE100 style (one idea per sentence, active voice, common words, the same term for the same thing). The first line is exactly one of `VERDICT: passed`, `VERDICT: failed → Task <new>`, `VERDICT: needs the user: <why>`, `VERDICT: cannot run: <what broke>`. Then the checklist in one line per item (✔ or ✘ and the evidence), then two lines for the Loop's lessons: what the implementer missed that one rule would have caught (or `none`), and what made the verification hard or weak (or `none`).

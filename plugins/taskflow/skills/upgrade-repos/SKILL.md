@@ -1,18 +1,20 @@
 ---
 name: upgrade-repos
-description: Brings taskflow repos with an older layout up to the installed taskflow (current Tool paths, tasks/LESSONS.md with Project and General sections), several repos in one pass, never pushing. Use when the user runs /taskflow:upgrade-repos, or when the session start hint says repos near this session use an older taskflow and the user agrees to upgrade.
+description: Brings taskflow repos with an older layout up to the installed taskflow (current Tool paths, tasks/LESSONS.md with Project and General sections, the writing-style rule in the Loop profiles), several repos in one pass, never pushing. Use when the user runs /taskflow:upgrade-repos, or when the session start hint says repos near this session use an older taskflow and the user agrees to upgrade.
 argument-hint: "[folder holding the repos, default: the current folder]"
 allowed-tools: AskUserQuestion, Bash(python3 ${CLAUDE_SKILL_DIR}/upgrade_repos.py *), Bash(python ${CLAUDE_SKILL_DIR}/upgrade_repos.py *)
 ---
 
 Upgrade old taskflow repos. The script does the work at zero tokens (`init`, `migrate-tool`, `check`, one local commit per repo); you scan, ask, run it and report. Report in the language of the conversation. `$ARGUMENTS`, if given, is the folder to scan.
 
+**Writing style (ASD-STE100, in the language you write).** One idea per sentence: about 20 words for a description, 15 for a step. Active voice. Steps in the imperative, one action per step. Common words, one meaning per word, the same term for the same thing. Prose only: headings, field names, ids, commands, code and the parsed header lines stay as their format requires.
+
 ## 1. Scan
 
 Run `python3 ${CLAUDE_SKILL_DIR}/upgrade_repos.py scan [folder]` (`python` on Windows when `python3` is missing). It lists the taskflow repos at the folder, in its children and in its siblings, as:
 
 - `ok`: nothing to do;
-- `auto`: `init` + `migrate-tool` fix it;
+- `auto`: `init` + `migrate-tool` fix it, and the script adds the ASD-STE100 writing rule to the repo's Loop profiles (`.claude/agents/implementer.md`, `verifier.md`; every repo-specific line stays);
 - `manual`: a pre-pipeline layout (`LEGACY`): the script does not touch it, it needs `/taskflow:break-it-down` in that repo (migrate branch).
 
 When no repo needs work, say so and stop.

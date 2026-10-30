@@ -61,6 +61,9 @@ the user.
 Every branch that writes or rewrites a task file follows
 [task-format.md](task-format.md).
 
+Every word you write follows [writing-style.md](writing-style.md): task files, grill
+questions, reports and the closing summary.
+
 Before cutting or writing any task, read `tasks/LESSONS.md`, both sections:
 **Project** (lessons that name something of this repo) and **General (holds
 in any project)** (tool, OS and verification-method lessons that hold

@@ -5,7 +5,9 @@ template is in the repo's `TASKS.md` ("Task template"); the repo's own values
 (Who, Types, Design gate, Loop) are in its "Task system" section.
 
 Write tasks in the language of the repo's docs, whatever language the notes
-or the conversation are in.
+or the conversation are in, in the style of [writing-style.md](writing-style.md)
+(ASD-STE100: short sentences, active voice, imperative steps, one term per
+thing).
 
 ## Stage: what does this task need next?
 

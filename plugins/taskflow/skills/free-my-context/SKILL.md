@@ -8,6 +8,8 @@ allowed-tools: Read, Glob, Grep, AskUserQuestion, Bash(python3 *), Bash(python *
 
 A conversation, one area at a time, like plan mode: list what is active, ask what to switch off, write once. Report and ask in the language of the conversation. `$ARGUMENTS`, if given, limits the session to that area.
 
+**Writing style (ASD-STE100, in the language you write).** One idea per sentence: about 20 words for a description, 15 for a step. Active voice. Steps in the imperative, one action per step. Common words, one meaning per word, the same term for the same thing. Prose only: headings, field names, ids, commands, code and the parsed header lines stay as their format requires.
+
 Nothing is written until the final confirmation (step 7). Writes go **only** to `<project>/.claude/settings.local.json`; this skill never edits the user or project settings.
 
 The mechanical facts come from the Tool `free_my_context.py` next to this file (zero tokens, no model call): `python3 "${CLAUDE_PLUGIN_ROOT}/skills/free-my-context/free_my_context.py" …` (`python` when there is no `python3`). The judgement is yours.

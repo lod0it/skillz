@@ -31,7 +31,7 @@ Never end a turn with background work (a `run_in_background` command, a server, 
 
 The Tool is `taskflow`. It alone changes a task's folder, its Status line and the index in `TASKS.md`.
 
-1. Rewrite the task's `## Verification` for the verifier: a checklist, one observable result per acceptance criterion (what to call or open, the data or state to set up first, what must come out), the design images to compare for a UI, and what you are unsure of. Write its `## Outcome`. Change these sections with the Edit tool, never with a script that splices the file by string search: a task's prose may quote its own headings, and every other section must survive untouched.
+1. Rewrite the task's `## Verification` for the verifier: a checklist, one observable result per acceptance criterion (what to call or open, the data or state to set up first, what must come out), the design images to compare for a UI, and what you are unsure of. Write its `## Outcome`. Write both in ASD-STE100 style. Change these sections with the Edit tool, never with a script that splices the file by string search: a task's prose may quote its own headings, and every other section must survive untouched.
 2. `taskflow move <id> to-be-tested`, with `--note "<what is pending>"` when steps of yours are left pending.
 3. `taskflow check` must print `0 errors`; if not, fix the task file before committing.
 4. Commit locally with the message `Task <id>: <title>`, ending with the line `Co-Authored-By: Claude <noreply@anthropic.com>`.
@@ -45,4 +45,4 @@ Blocked by a decision only the user can make, or by a failing test you cannot fi
 
 ## Final answer
 
-At most 15 lines, in the language of the repo's docs: what changed (files and modules), the suite result (number of tests), what you saw when you ran the product, pending steps, and any doubt or decision the user should know about.
+At most 15 lines, in the language of the repo's docs, in ASD-STE100 style (one idea per sentence, active voice, common words, the same term for the same thing): what changed (files and modules), the suite result (number of tests), what you saw when you ran the product, pending steps, and any doubt or decision the user should know about.

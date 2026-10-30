@@ -7,6 +7,8 @@ allowed-tools: Read, Glob, Grep, AskUserQuestion, Bash(taskflow *), Bash(git log
 
 Analysis of the repo's `tasks/` pipeline, ending in a menu of next actions. Up to the menu it changes nothing: no moves, no edits, no commits. Report in the language of the conversation. `$ARGUMENTS`, if given, narrows the analysis to that task id or area.
 
+**Writing style (ASD-STE100, in the language you write).** One idea per sentence: about 20 words for a description, 15 for a step. Active voice. Steps in the imperative, one action per step. Common words, one meaning per word, the same term for the same thing. Prose only: headings, field names, ids, commands, code and the parsed header lines stay as their format requires.
+
 This skill runs inline — deliberately **not** `context: fork`: the menu needs the user, and the action they pick (the Loop, a grill) runs in this session.
 
 The mechanical facts come from the Tool, which costs no tokens; the judgement (contract conflicts, order) is yours. Do not recompute what the Tool prints.

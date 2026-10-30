@@ -21,7 +21,10 @@ PLUGIN = HERE.parent.parent
 TASKS_PY = PLUGIN / "skills" / "break-it-down" / "tasks.py"
 SNOOZE = Path.home() / ".claude" / "taskflow" / "upgrade_snooze.json"
 SCAN_CAP = 80
-UPGRADE_PATHS = ("TASKS.md", ".claude/agents/implementer.md", "tasks")
+UPGRADE_PATHS = ("TASKS.md", ".claude/agents/implementer.md", ".claude/agents/verifier.md", "tasks")
+PROFILES = (".claude/agents/implementer.md", ".claude/agents/verifier.md")
+STYLE_MARK = "ASD-STE100"
+STYLE_PHRASE = "in ASD-STE100 style (one idea per sentence, active voice, common words, the same term for the same thing)"
 
 sys.path.insert(0, str(TASKS_PY.parent))
 import tasks  # noqa: E402
@@ -58,6 +61,27 @@ def candidates(base):
     return out
 
 
+def profile_needs_style(path):
+    try:
+        return STYLE_MARK not in Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return False  # no profile: the Loop writes it from the template, which has the rule
+
+
+def patch_profile(path):
+    """Add the writing-style rule to a Loop profile, keeping every repo-specific line. Idempotent."""
+    path = Path(path)
+    text = path.read_bytes().decode("utf-8")
+    nl = "\r\n" if "\r\n" in text else "\n"
+    # the final-answer sentence: "At most N lines, in <language>" followed by ":" or "."
+    new, n = re.subn(r"(At most \d+ lines, in [^:.\r\n]*?)([:.])",
+                     lambda m: f"{m.group(1)}, {STYLE_PHRASE}{m.group(2)}", text, count=1)
+    if not n:  # a customised profile: say it in one added line instead
+        new = text.rstrip() + f"{nl}{nl}Write your final answer {STYLE_PHRASE}.{nl}"
+    new = new.replace("Write its `## Outcome`.", "Write its `## Outcome`. Write both in ASD-STE100 style.", 1)
+    path.write_bytes(new.encode("utf-8"))
+
+
 def assess(repo):
     """{'repo', 'state': ok|auto|manual, 'reasons': [...]}: auto = init + migrate-tool fixes it,
     manual = an older layout that needs the migrate branch of /taskflow:break-it-down."""
@@ -72,6 +96,8 @@ def assess(repo):
         elif line.startswith("OLD-TOOL") or "(run `init`)" in line:
             reasons.append(line)
     reasons += [w for w in warnings if "LESSONS" in w]
+    reasons += [f"STYLE {rel} lacks the ASD-STE100 writing rule (run `apply`)"
+                for rel in PROFILES if profile_needs_style(repo / rel)]
     state = "ok" if not reasons else "manual" if manual else "auto"
     return {"repo": str(repo), "state": state, "reasons": reasons}
 
@@ -106,6 +132,9 @@ def apply_repo(repo, commit=False):
         return "ok", "already up to date"
     run_tool(repo, "init")
     run_tool(repo, "migrate-tool")
+    for rel in PROFILES:
+        if profile_needs_style(repo / rel):
+            patch_profile(repo / rel)
     code, out = run_tool(repo, "check")
     summary = out.splitlines()[-1] if out else "check printed nothing"
     if code:
@@ -115,7 +144,7 @@ def apply_repo(repo, commit=False):
         if git(repo, "diff", "--cached", "--quiet")[0] == 0:
             return "upgraded", f"{summary}; nothing to commit"
         rc, msg = git(repo, "commit", "-m", f"taskflow: upgrade to {plugin_version()} "
-                      "(LESSONS.md with Project and General sections, current Tool paths)")
+                      "(LESSONS.md with Project and General sections, current Tool paths, ASD-STE100 rule in the Loop profiles)")
         return ("upgraded", f"{summary}; committed, not pushed") if rc == 0 else ("check-failed", f"commit failed: {msg}")
     return "upgraded", f"{summary}; changes left uncommitted"
 
