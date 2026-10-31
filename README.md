@@ -45,7 +45,7 @@ statusline style show              # which layer wins, and why
 statusline style color gray        # grayscale mode (also: on, off)
 ```
 
-Inside Claude Code type `! statusline style set tree`: the `!` runs it in your shell without using tokens (the plugin's `bin/` is on the PATH while it is enabled; after `./skillz install` the command is also in `~/.local/bin`). The line changes at the next answer. Add `--project` to `set`, `next`, `prev`, `random`, `fit` and `alert` to write the current project's file instead of your user config.
+The word `style` is optional (`statusline set tree` works too). Inside Claude Code type `! statusline style set tree`: the `!` runs it in your shell without using tokens (the plugin's `bin/` is on the PATH while it is enabled; after `./skillz install` the command is also in `~/.local/bin`). The line changes at the next answer. Add `--project` to `set`, `next`, `prev`, `random`, `fit` and `alert` to write the current project's file instead of your user config.
 
 | Style | Look | Needs |
 |---|---|---|
