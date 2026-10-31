@@ -28,15 +28,83 @@ The plugin also ships the `taskflow` command (`plugins/taskflow/bin/`, on the Ba
 
 ### `statusline`
 
-The command Claude Code runs for its status line, zero tokens, no skills. It prints one short line, e.g. `Opus · proj │ session 42% · resets 15:10 │ week 18% · resets Mon 09:00` (model, folder of the current directory, then the Pro/Max `five_hour` and `seven_day` usage with reset times), and saves the latest limits for other tools (the Agentic Control Plane app) to `~/.claude/statusline/rate_limits.json` (`CLAUDE_CONFIG_DIR` is honoured), written atomically:
+The command Claude Code runs for its status line, zero tokens, no skills. It shows the git branch of the current directory, the share of the context window in use, and the Pro/Max usage of the 5-hour session and of the week with the time left to each reset. **24 styles** draw the same four values; you pick one (or several, with rules) and switch with one command.
+
+```
+Branch: main | CTX 37% | Session 65% ⟳ 1h 40m | Weekly 14% ⟳ 4d 16h      (the default style, plain)
+```
+
+#### Choose a style
+
+```sh
+statusline style list              # the 24 styles, * marks the one in use
+statusline style preview all       # draw every style on sample data (or: preview tree)
+statusline style set tree          # save your choice
+statusline style next              # or prev, random: step through the styles
+statusline style show              # which layer wins, and why
+```
+
+Inside Claude Code type `! statusline style set tree`: the `!` runs it in your shell without using tokens (the plugin's `bin/` is on the PATH while it is enabled; after `./skillz install` the command is also in `~/.local/bin`). The line changes at the next answer. Add `--project` to `set`, `next`, `prev`, `random`, `fit` and `alert` to write the current project's file instead of your user config.
+
+| Style | Look | Needs |
+|---|---|---|
+| `plain` | Branch: main | CTX 4% | Session 12% ⟳ 4h | Weekly 14% ⟳ 4d | - |
+| `dim` | Faded labels, bold values | - |
+| `segments` | Ten ▰▱ cells per metric | - |
+| `solid` | Full block over light shade | - |
+| `smooth` | Eighth-block edge on a tinted track (80 steps) | colors |
+| `gradient` | Green to red hue along the bar | truecolor |
+| `heat` | Cells turn yellow past 60, red past 85 | - |
+| `dots` | Filled and hollow circles | - |
+| `pie` | One ○◔◑◕● glyph per metric | - |
+| `gauge` | One rising block per metric | - |
+| `spark` | Last eight readings (history file) | - |
+| `pace` | White ┃ marks how much of the window has passed | - |
+| `lights` | Only a dot carries the color | - |
+| `chips` | Gray label tile, colored value tile | colors |
+| `brackets` | [main] [CTX 4%] [Session 12% ⟳ 4h] | - |
+| `pills` | Rounded capsules | Nerd/Powerline font |
+| `powerline` | Arrow-joined colored segments | Nerd/Powerline font |
+| `emoji` | 🌿 main 🧠 4% ⏱ 12% 📅 14% | emoji |
+| `symbols` | Monochrome symbols instead of emoji | - |
+| `tree` | Four aligned lines with bars | - |
+| `dash` | Two lines: branch and context, then the two limits | - |
+| `circuit` | Boxes joined by lines in phosphor green | - |
+| `whisper` | Everything dim except what needs attention | - |
+| `inbar` | Label and value inside the bar | colors |
+
+Every style prints the metrics it has: a missing session or weekly limit (before the first answer, other plans) is left out, never shown as zero. Styles marked "colors" fall back to `brackets` under `NO_COLOR`. `gradient` uses 24-bit color when `COLORTERM` says `truecolor` or `24bit`, plain ANSI otherwise. `powerline` and `pills` draw with glyphs of a Powerline or Nerd Font: without one you see boxes, so pick another style. Emoji width differs between terminals; `symbols` is the fixed-width alternative.
+
+#### Where the choice lives
+
+Strongest first; the first layer that names a valid style wins, an unknown name is skipped, the default is `plain`.
+
+| Layer | Where | Set with |
+|---|---|---|
+| Environment | `STATUSLINE_STYLE=pie` (also under `env` in a `settings.json`) | by hand |
+| Project | `<project>/.claude/statusline.json`: `{"style": "solid"}` | `statusline style set solid --project` |
+| User | `~/.claude/statusline/config.json` (`CLAUDE_CONFIG_DIR` is honoured) | `statusline style set solid` |
+
+Two optional rules sit on top of the chosen style, in the user or project file (the project value wins):
+
+- **Alert:** `{"alert": {"at": 85, "style": "heat"}}` switches to `heat` when any value reaches 85 percent. Set with `statusline style alert 85 heat`; `alert off` removes it.
+- **Fit:** `{"fit": ["pie", "whisper"]}` walks the list when the style is wider than the terminal and uses the first that fits (the last one, clipped, if none does). Set with `statusline style fit pie,whisper`; `fit off` removes it. The width comes from `"columns": 100` in the file, else the terminal, else `$COLUMNS`; when none is known the rule does nothing. Widths count emoji as two columns.
+
+Order of the rules: layers, then alert, then fit. A broken or unreadable config file is ignored and the default style is drawn.
+
+#### Details
+
+The percentages are bold and colored like a traffic light on the rounded number: green under 60, yellow 60 to 85, red above 85; with `NO_COLOR` set (not empty) no escape sequence is printed. The countdown reads `Nm` under an hour, `Hh Mm` under a day, `Dd Hh` from a day (`0m` once the reset has passed). `CTX` comes from `context_window.used_percentage` (or, without it, current usage over the window size). The `pace` style marks with a white `┃` how much of the 5-hour or 7-day window has already passed: fill left of it means you use less than time allows. The `spark` style shows the last eight readings; the plugin keeps them in `~/.claude/statusline/history.json` (a reading is added when it changes, the context history restarts with each session).
+
+The plugin also saves the latest limits for other tools (the Agentic Control Plane app) to `~/.claude/statusline/rate_limits.json` (`CLAUDE_CONFIG_DIR` is honoured), written atomically; the file does not depend on the style:
 
 ```json
 {"schema": 1, "updated_at": 1790000000, "session_id": "abc", "five_hour": {"used_percentage": 42, "resets_at": 1790000000}, "seven_day": {"used_percentage": 18, "resets_at": 1790400000}}
 ```
 
-When stdin has no `rate_limits` (before the first answer, other plans) the line is printed without limits and the file is not touched; any error prints a minimal line, never a traceback. The newest write wins when several terminals are open. It runs in the terminal CLI (also in VS Code's integrated terminal), not in the VS Code native panel.
+When stdin has no `rate_limits` the line is printed without limits and the file is not touched; any error prints a minimal line, never a traceback. The newest write wins when several terminals are open. It runs in the terminal CLI (also in VS Code's integrated terminal), not in the VS Code native panel. Stdlib Python 3 only. Tests: `cd plugins/statusline && python3 -m unittest discover`.
 
-`./skillz install --plugins statusline` links `~/.local/bin/statusline` (on Windows the plugin's `bin/statusline.cmd` is used in place) and sets `statusLine` in `~/.claude/settings.json` after a backup (`settings.json.bak-<time>`). A different `statusLine` already there is kept unless you pass `--force`; `./skillz uninstall --plugins statusline` removes it (or restores the previous one).
+`./skillz install --plugins statusline` links `~/.local/bin/statusline` (on Windows the plugin's `bin/statusline.cmd` is used in place) and sets `statusLine` in `~/.claude/settings.json` after a backup (`settings.json.bak-<time>`). On Windows the command is written with forward slashes (`C:/Users/you/.../statusline.cmd`): Claude Code runs it through bash, which eats backslashes, so a `C:\Users\...` path ends in "command not found" and no line is shown. If you set `statusLine` by hand, use forward slashes too. A different `statusLine` already there is kept unless you pass `--force`; `./skillz uninstall --plugins statusline` removes it (or restores the previous one).
 
 ## Install
 
