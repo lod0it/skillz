@@ -247,7 +247,7 @@ def run(raw):
 
 # ---------- command line: statusline style ... ----------
 
-USAGE = """usage: statusline style <command>
+USAGE = """usage: statusline [style] <command>   (the word "style" is optional)
   list                     all styles; * marks the one in use
   preview [name|all]       draw a style (default: the one in use) on sample data
   set <name> [--project]   save the style (user config, or this project's file)
@@ -258,6 +258,9 @@ USAGE = """usage: statusline style <command>
   color on|gray|off        colors, grayscale (no hue) or none [--project]
 preview takes --gray or --off to try a mode without saving it.
 NO_COLOR (any value) and STATUSLINE_COLOR=on|gray|off override the setting."""
+
+
+COMMANDS = ("list", "preview", "set", "next", "prev", "random", "show", "fit", "alert", "color")
 
 
 def sample_data():
@@ -277,6 +280,8 @@ def _target(args):
 def cli(argv, out=print):
     """-> exit code."""
     args = [a for a in argv if a]
+    if args and args[0] in COMMANDS:
+        args = ["style"] + args
     if not args or args[0] != "style" or len(args) < 2 or args[1] in ("-h", "--help", "help"):
         out(USAGE)
         return 0 if args and args[-1] in ("-h", "--help", "help") else 2

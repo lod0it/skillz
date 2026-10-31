@@ -386,6 +386,15 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("\x1b", text)
         self.assertFalse(cfg.user_path().exists())
 
+    def test_style_word_is_optional(self):
+        code, text = self.cli("set", "brackets")
+        self.assertEqual(code, 0)
+        self.assertEqual(cfg.read(cfg.user_path())["style"], "brackets")
+        self.assertEqual(len(self.cli("list")[1].split("\n")), 24)
+        self.assertEqual(self.cli("preview", "plain")[0], 0)
+        self.assertEqual(self.cli("color", "gray")[0], 0)
+        self.assertEqual(self.cli("bogus")[0], 2)
+
     def test_usage(self):
         self.assertEqual(self.cli()[0], 2)
         self.assertEqual(self.cli("style")[0], 2)
