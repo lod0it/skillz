@@ -115,6 +115,76 @@ class StylesTest(unittest.TestCase):
         self.assertNotIn("needs", styles.describe("plain"))
 
 
+class GrayTest(unittest.TestCase):
+    HUE_FG = re.compile(r"\x1b\[(?:[0-9;]*;)?(?:3[1-6]|9[1-6]|4[1-6])(?:;[0-9;]*)?m")
+
+    def codes(self, out):
+        return [c for grp in re.findall(r"\x1b\[([0-9;]*)m", out) for c in [grp]]
+
+    def test_no_hue_in_gray_mode(self):
+        P = styles.Paint(True, True, gray=True)
+        for name in styles.NAMES:
+            for d in (data(), data(ctx=91, ses=94, wk=88)):
+                out = styles.render(name, d, P)
+                for grp in self.codes(out):
+                    parts = grp.split(";")
+                    i = 0
+                    while i < len(parts):
+                        c = parts[i]
+                        if c in ("38", "48") and parts[i + 1:i + 2] == ["5"]:
+                            n = int(parts[i + 2])
+                            self.assertTrue(n >= 232 or n in (15, 16), (name, grp))
+                            i += 3
+                            continue
+                        self.assertNotIn(c, ("31", "32", "33", "34", "35", "36", "41", "42", "43", "44",
+                                             "45", "46", "92"), (name, grp))
+                        i += 1
+                self.assertNotIn("38;2;", out, name)
+
+    def test_gray_keeps_severity_visible(self):
+        P = styles.Paint(True, False, gray=True)
+        low, mid, high = (styles.render("plain", data(ses=v, ctx=None, wk=None), P) for v in (10, 70, 95))
+        self.assertEqual(len({low, mid, high}), 3)
+        self.assertIn("\x1b[1;7;97m95%", high)
+        self.assertNotIn(";7;", low)
+
+    def test_gray_matches_color_text(self):
+        for name in styles.NAMES:
+            a = plain(styles.render(name, data(), styles.Paint(True, False)))
+            b = plain(styles.render(name, data(), styles.Paint(True, False, gray=True)))
+            self.assertEqual(a, b, name)
+
+    def test_color_mode_precedence(self):
+        with tempfile.TemporaryDirectory() as t:
+            with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": t}):
+                os.environ.pop("NO_COLOR", None)
+                os.environ.pop("STATUSLINE_COLOR", None)
+                self.assertEqual(cfg.color_mode(t), "on")
+                cfg.write(cfg.user_path(), {"color": "gray"})
+                self.assertEqual(cfg.color_mode(t), "gray")
+                cfg.write(cfg.user_path(), {"color": "bogus"})
+                self.assertEqual(cfg.color_mode(t), "on")
+                cfg.write(cfg.user_path(), {"color": "gray"})
+                self.assertEqual(cfg.color_mode(t, {"STATUSLINE_COLOR": "off"}), "off")
+                self.assertEqual(cfg.color_mode(t, {"STATUSLINE_COLOR": "on"}), "on")
+                self.assertEqual(cfg.color_mode(t, {"NO_COLOR": "1", "STATUSLINE_COLOR": "on"}), "off")
+
+    def test_run_uses_the_configured_mode(self):
+        doc = RunTest.DOC
+        with tempfile.TemporaryDirectory() as t:
+            with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": t}):
+                for k in ("NO_COLOR", "STATUSLINE_COLOR", "STATUSLINE_STYLE"):
+                    os.environ.pop(k, None)
+                cfg.write(cfg.user_path(), {"color": "gray"})
+                gray = statusline.run(json.dumps(doc))
+                self.assertIn("\x1b[", gray)
+                self.assertNotIn("\x1b[1;32m", gray)
+                cfg.write(cfg.user_path(), {"color": "off"})
+                self.assertNotIn("\x1b", statusline.run(json.dumps(doc)))
+                cfg.write(cfg.user_path(), {"color": None})
+                self.assertIn("\x1b[1;32m", statusline.run(json.dumps(doc)))
+
+
 class ConfigTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -294,6 +364,27 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("user config", text)
         self.assertIn("shown: tree", text)
+
+    def test_color_command(self):
+        os.environ.pop("NO_COLOR")
+        self.assertEqual(self.cli("style", "color", "gray")[0], 0)
+        self.assertEqual(cfg.read(cfg.user_path())["color"], "gray")
+        self.cli("style", "color", "off", "--project")
+        self.assertEqual(cfg.read(cfg.project_path(self.proj))["color"], "off")
+        self.assertEqual(self.cli("style", "color", "on")[0], 0)
+        self.assertIn("note: off still wins", "\n".join(self.lines))
+        self.assertNotIn("color", cfg.read(cfg.user_path()))
+        self.assertEqual(self.cli("style", "color", "pink")[0], 2)
+        self.assertEqual(self.cli("style", "color")[0], 2)
+
+    def test_preview_modes_do_not_save(self):
+        os.environ.pop("NO_COLOR")
+        code, text = self.cli("style", "preview", "plain", "--gray")
+        self.assertIn("\x1b[", text)
+        self.assertNotIn("\x1b[1;32m", text)
+        code, text = self.cli("style", "preview", "plain", "--off")
+        self.assertNotIn("\x1b", text)
+        self.assertFalse(cfg.user_path().exists())
 
     def test_usage(self):
         self.assertEqual(self.cli()[0], 2)

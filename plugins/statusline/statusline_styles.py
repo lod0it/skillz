@@ -41,12 +41,41 @@ class Data:
 
 
 class Paint:
-    """ANSI helper. With enabled False every method returns the bare text."""
-    CODES = {"g": "32", "y": "33", "r": "31", "c": "36", "dim": "90"}
+    """ANSI helper. With enabled False every method returns the bare text.
 
-    def __init__(self, enabled=True, truecolor=False):
+    With gray True no hue is used: severity is told by brightness (gray, white,
+    bold white) and, on the number of a red value, by reverse video.
+    """
+    COLOR = {"g": "32", "y": "33", "r": "31", "c": "36", "dim": "90"}
+    GRAY = {"g": "37", "y": "97", "r": "1;97", "c": "97", "dim": "90"}
+
+    def __init__(self, enabled=True, truecolor=False, gray=False):
         self.enabled = enabled
         self.truecolor = truecolor
+        self.gray = gray
+        self.CODES = self.GRAY if gray else self.COLOR
+
+    def sev256(self, s):
+        return {"g": 245, "y": 250, "r": 255}[s] if self.gray else SEV256[s]
+
+    def sevbg(self, s):
+        return f"48;5;{self.sev256(s)}" if self.gray else str(SEVBG[s])
+
+    @property
+    def branch256(self):
+        return 243 if self.gray else 74
+
+    @property
+    def edge256(self):
+        return 240 if self.gray else 62
+
+    @property
+    def accent_bg(self):
+        return "48;5;252" if self.gray else "46"
+
+    @property
+    def phosphor(self):
+        return "97" if self.gray else GREEN_PHOSPHOR
 
     def wrap(self, codes, text):
         if not self.enabled or text == "":
@@ -60,7 +89,10 @@ class Paint:
         return self.col("dim", text)
 
     def val(self, pct):
-        return self.col(sev(pct), f"{round(pct)}%", True)
+        s = sev(pct)
+        if self.gray and s == "r":
+            return self.wrap("1;7;97", f"{round(pct)}%")
+        return self.col(s, f"{round(pct)}%", True)
 
 
 # ---------- width ----------
@@ -113,7 +145,9 @@ def gradient(P, p, n):
     f = _cells(p, n)
     s = ""
     for i in range(f):
-        if P.truecolor:
+        if P.gray:
+            s += P.wrap(f"38;5;{240 + round(15 * i / max(1, n - 1))}", "█")
+        elif P.truecolor:
             r, g, b = colorsys.hls_to_rgb((140 - 140 * i / max(1, n - 1)) / 360, 0.55, 0.72)
             s += P.wrap(f"38;2;{round(r * 255)};{round(g * 255)};{round(b * 255)}", "█")
         else:
@@ -225,9 +259,9 @@ def _lights(d, P):
 
 @style("chips", "Gray label tile, colored value tile", color=True)
 def _chips(d, P):
-    br = _branch(d, lambda b: P.wrap(f"48;5;{TRACK};97", " ⎇ ") + P.wrap("46;30;1", f" {b} "))
+    br = _branch(d, lambda b: P.wrap(f"48;5;{TRACK};97", " ⎇ ") + P.wrap(f"{P.accent_bg};30;1", f" {b} "))
     return _join([br] + [P.wrap(f"48;5;{TRACK};97", f" {m.label} ") +
-                         P.wrap(f"{SEVBG[sev(m.pct)]};30;1", f" {round(m.pct)}% ") + _tail(P, m)
+                         P.wrap(f"{P.sevbg(sev(m.pct))};30;1", f" {round(m.pct)}% ") + _tail(P, m)
                          for m in d.metrics], "  ")
 
 
@@ -243,8 +277,8 @@ def _pills(d, P):
     def pill(c, text):
         return (P.wrap(f"38;5;{c}", "") + P.wrap(f"48;5;{c};38;5;16;1", text) +
                 P.wrap(f"38;5;{c}", ""))
-    br = _branch(d, lambda b: pill(74, f"⎇ {b}"))
-    return _join([br] + [pill(SEV256[sev(m.pct)], f"{m.label} {round(m.pct)}%{_plain_tail(m)}")
+    br = _branch(d, lambda b: pill(P.branch256, f"⎇ {b}"))
+    return _join([br] + [pill(P.sev256(sev(m.pct)), f"{m.label} {round(m.pct)}%{_plain_tail(m)}")
                          for m in d.metrics], " ")
 
 
@@ -252,9 +286,9 @@ def _pills(d, P):
 def _powerline(d, P):
     segs = []
     if d.branch:
-        segs.append((62, 15, f" {d.branch} "))
+        segs.append((P.edge256, 15, f" {d.branch} "))
     for m in d.metrics:
-        segs.append((SEV256[sev(m.pct)], 16, f" {m.label} {round(m.pct)}%{_plain_tail(m)} "))
+        segs.append((P.sev256(sev(m.pct)), 16, f" {m.label} {round(m.pct)}%{_plain_tail(m)} "))
     out = ""
     for i, (bg, fg, text) in enumerate(segs):
         nxt = f"48;5;{segs[i + 1][0]}" if i + 1 < len(segs) else "49"
@@ -303,7 +337,7 @@ def _dash(d, P):
 
 @style("circuit", "Boxes joined by lines in phosphor green")
 def _circuit(d, P):
-    g = lambda t: P.wrap(GREEN_PHOSPHOR, t)
+    g = lambda t: P.wrap(P.phosphor, t)
 
     def seg(inner):
         return g("[ ") + inner + g(" ]")
@@ -330,7 +364,7 @@ def _inbar(d, P):
         pad = (w - len(txt)) // 2
         s = " " * pad + txt + " " * (w - len(txt) - pad)
         f = _cells(m.pct, w)
-        return (P.wrap(f"{SEVBG[sev(m.pct)]};30;1", s[:f]) + P.wrap(f"48;5;{TRACK}", s[f:]) + _tail(P, m))
+        return (P.wrap(f"{P.sevbg(sev(m.pct))};30;1", s[:f]) + P.wrap(f"48;5;{TRACK}", s[f:]) + _tail(P, m))
     br = _branch(d, lambda b: "⎇ " + P.col("c", b, True))
     return _join([br] + [piece(m, 14 if m.key == "ctx" else 18) for m in d.metrics], "  ")
 

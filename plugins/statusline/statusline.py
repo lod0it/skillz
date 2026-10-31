@@ -98,10 +98,10 @@ def _text(v):
     return v if isinstance(v, str) else ""
 
 
-def get_paint():
-    colors = not os.environ.get("NO_COLOR")
+def get_paint(cwd=None, mode=None):
+    mode = mode or cfg.color_mode(cwd)
     tc = os.environ.get("COLORTERM", "").lower() in ("truecolor", "24bit")
-    return styles.Paint(colors, tc)
+    return styles.Paint(mode != "off", tc, mode == "gray")
 
 
 def git_branch(cwd):
@@ -187,7 +187,7 @@ def format_line(doc, now=None, hist=None, cols=None):
     now = time.time() if now is None else now
     doc = doc if isinstance(doc, dict) else {}
     data, cwd = build_data(doc, now, hist)
-    P = get_paint()
+    P = get_paint(cwd)
     if cols is None:
         cols = cfg.terminal_columns(cwd)
     name, _ = cfg.choose(data, P, cwd, cols)
@@ -254,7 +254,10 @@ USAGE = """usage: statusline style <command>
   next | prev | random     step through the styles [--project]
   show                     which layer wins, and why
   fit <a,b,...|off>        fallback styles when the line is wider than the terminal
-  alert <at> <name>|off    switch to <name> when any value reaches <at> percent"""
+  alert <at> <name>|off    switch to <name> when any value reaches <at> percent
+  color on|gray|off        colors, grayscale (no hue) or none [--project]
+preview takes --gray or --off to try a mode without saving it.
+NO_COLOR (any value) and STATUSLINE_COLOR=on|gray|off override the setting."""
 
 
 def sample_data():
@@ -277,11 +280,13 @@ def cli(argv, out=print):
     if not args or args[0] != "style" or len(args) < 2 or args[1] in ("-h", "--help", "help"):
         out(USAGE)
         return 0 if args and args[-1] in ("-h", "--help", "help") else 2
-    cmd, rest = args[1], [a for a in args[2:] if a != "--project"]
+    cmd = args[1]
+    flags = [a for a in args[2:] if a.startswith("--")]
+    rest = [a for a in args[2:] if not a.startswith("--")]
     cwd = os.getcwd()
     cur, source = cfg.requested(cwd)
     names = styles.NAMES
-    P = get_paint()
+    P = get_paint(cwd, "gray" if "--gray" in flags else "off" if "--off" in flags else None)
     if cmd == "list":
         for n in names:
             out(f"{'*' if n == cur else ' '} {n:<10} {styles.describe(n)}")
@@ -318,6 +323,7 @@ def cli(argv, out=print):
     if cmd == "show":
         for src, name in cfg.layers(cwd):
             out(f"{src:<22} {name or '-'}")
+        out(f"{'color mode':<22} {cfg.color_mode(cwd)}")
         data = sample_data()
         name, trace = cfg.choose(data, P, cwd, cfg.terminal_columns(cwd))
         for t in trace:
@@ -352,6 +358,16 @@ def cli(argv, out=print):
             return 2
         cfg.write(path, {"alert": {"at": int(rest[0]), "style": rest[1]}})
         out(f"alert: at {rest[0]}% use {rest[1]}  ({label})")
+        return 0
+    if cmd == "color":
+        path, label = _target(args)
+        if len(rest) != 1 or rest[0] not in cfg.MODES:
+            out("usage: statusline style color on|gray|off")
+            return 2
+        cfg.write(path, {"color": None if rest[0] == "on" else rest[0]})
+        out(f"color = {rest[0]}  ({label})")
+        if cfg.color_mode(cwd) != rest[0]:
+            out(f"note: {cfg.color_mode(cwd)} still wins (NO_COLOR, STATUSLINE_COLOR or a stronger file)")
         return 0
     out(USAGE)
     return 2

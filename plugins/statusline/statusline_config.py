@@ -141,3 +141,18 @@ def terminal_columns(cwd):
         return n if n > 0 else None
     except ValueError:
         return None
+
+
+MODES = ("on", "gray", "off")
+
+
+def color_mode(cwd, env=None):
+    """-> "on", "gray" or "off": NO_COLOR, STATUSLINE_COLOR, then the "color" setting."""
+    env = os.environ if env is None else env
+    if env.get("NO_COLOR"):
+        return "off"
+    v = (env.get("STATUSLINE_COLOR") or "").lower()
+    if v in MODES:
+        return v
+    v = settings(cwd).get("color")
+    return v if v in MODES else "on"
