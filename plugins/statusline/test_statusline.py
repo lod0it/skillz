@@ -41,16 +41,15 @@ class StatuslineTest(unittest.TestCase):
 
     def test_full_prints_line_and_writes_file(self):
         line = statusline.run(json.dumps(FULL))
-        self.assertIn("Opus", line)
-        self.assertIn("proj", line)
-        self.assertRegex(plain(line), r"session 42% ⟳ .+ │ week 18% ⟳ ")
+        self.assertRegex(plain(line), r"Session 42% ⟳ .+ \| Weekly 18% ⟳ ")
         data = json.loads(self.file.read_text(encoding="utf-8"))
         self.assertEqual(data["schema"], 1)
         self.assertEqual(data["session_id"], "abc-123")
         self.assertIsInstance(data["updated_at"], int)
         self.assertEqual(data["five_hour"], {"used_percentage": 42, "resets_at": 1790000000})
         self.assertEqual(data["seven_day"], {"used_percentage": 18.4, "resets_at": 1790400000})
-        self.assertEqual(list(self.file.parent.iterdir()), [self.file])
+        self.assertEqual(sorted(p.name for p in self.file.parent.iterdir()),
+                         ["history.json", "rate_limits.json"])
 
     def test_session_id_null_when_missing(self):
         doc = dict(FULL)
@@ -61,7 +60,7 @@ class StatuslineTest(unittest.TestCase):
     def test_without_rate_limits_file_untouched(self):
         doc = {k: v for k, v in FULL.items() if k != "rate_limits"}
         line = statusline.run(json.dumps(doc))
-        self.assertEqual(line, "Opus · proj")
+        self.assertEqual(line, "claude")
         self.assertFalse(self.file.exists())
         self.file.parent.mkdir(parents=True)
         self.file.write_text("old", encoding="utf-8")
@@ -71,20 +70,22 @@ class StatuslineTest(unittest.TestCase):
     def test_partial_limits_do_not_write(self):
         doc = dict(FULL, rate_limits={"five_hour": FULL["rate_limits"]["five_hour"]})
         line = statusline.run(json.dumps(doc))
-        self.assertIn("session 42%", plain(line))
-        self.assertNotIn("week", line)
+        self.assertIn("Session 42%", plain(line))
+        self.assertNotIn("Weekly", line)
         self.assertFalse(self.file.exists())
 
     def test_context_share(self):
         doc = dict(FULL, context_window={"used_percentage": 37.4})
-        self.assertIn("Opus · proj │ ctx 37% │ session 42%", plain(statusline.run(json.dumps(doc))))
+        with mock.patch.object(statusline, "git_branch", return_value="main"):
+            self.assertRegex(plain(statusline.run(json.dumps(doc))),
+                             r"^Branch: main \| CTX 37% \| Session 42% ⟳ .+ \| Weekly 18% ⟳ ")
         derived = dict(FULL, context_window={
             "context_window_size": 200000,
             "current_usage": {"input_tokens": 1000, "cache_creation_input_tokens": 9000,
                               "cache_read_input_tokens": 40000, "output_tokens": 5}})
-        self.assertIn("ctx 25%", plain(statusline.run(json.dumps(derived))))
+        self.assertIn("CTX 25%", plain(statusline.run(json.dumps(derived))))
         for cw in (None, {}, {"used_percentage": None}, {"context_window_size": 0, "current_usage": {}}):
-            self.assertNotIn("ctx", statusline.run(json.dumps(dict(FULL, context_window=cw))))
+            self.assertNotIn("CTX", statusline.run(json.dumps(dict(FULL, context_window=cw))))
 
     def test_color_thresholds(self):
         env = {k: v for k, v in os.environ.items() if k != "NO_COLOR"}
@@ -117,11 +118,16 @@ class StatuslineTest(unittest.TestCase):
                                              "resets_at": now + 4 * 86400 + 16 * 3600}}}
         env = {k: v for k, v in os.environ.items() if k != "NO_COLOR"}
         with mock.patch.dict(os.environ, env, clear=True):
-            line = statusline.format_line(doc, now)
-        self.assertEqual(plain(line), "Opus · skillz_lab │ ctx 37% │ session 65% ⟳ 1h 40m │ week 14% ⟳ 4d 16h")
-        self.assertIn(f"ctx {G}37%", line)
-        self.assertIn(f"session {Y}65%", line)
-        self.assertIn(f"week {G}14%", line)
+            with mock.patch.object(statusline, "git_branch", return_value="main"):
+                line = statusline.format_line(doc, now)
+        self.assertEqual(plain(line), "Branch: main | CTX 37% | Session 65% ⟳ 1h 40m | Weekly 14% ⟳ 4d 16h")
+        self.assertIn(f"CTX {G}37%", line)
+        self.assertIn(f"Session {Y}65%", line)
+        self.assertIn(f"Weekly {G}14%", line)
+
+    def test_no_branch_outside_git(self):
+        self.assertEqual(statusline.git_branch(self.tmp.name), "")
+        self.assertEqual(statusline.git_branch(""), "")
 
     def test_file_keys_unchanged(self):
         statusline.run(json.dumps(FULL))
@@ -137,14 +143,14 @@ class StatuslineTest(unittest.TestCase):
 
     def test_unwritable_dir_still_prints(self):
         with mock.patch.object(statusline, "write_limits", side_effect=OSError):
-            self.assertIn("session 42%", plain(statusline.run(json.dumps(FULL))))
+            self.assertIn("Weekly 18%", plain(statusline.run(json.dumps(FULL))))
 
     def test_entry_point_process(self):
         r = subprocess.run([sys.executable, str(HERE / "statusline.py")],
                            input=json.dumps(FULL).encode(), capture_output=True,
                            env={**os.environ, "CLAUDE_CONFIG_DIR": self.tmp.name})
         self.assertEqual(r.returncode, 0)
-        self.assertIn("session 42%", plain(r.stdout.decode("utf-8")))
+        self.assertIn("Weekly 18%", plain(r.stdout.decode("utf-8")))
         self.assertTrue(self.file.exists())
         r = subprocess.run([sys.executable, str(HERE / "statusline.py")],
                            input=b"\xff\xfe garbage", capture_output=True)

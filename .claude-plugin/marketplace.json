@@ -13,7 +13,7 @@
     {
       "name": "statusline",
       "source": "./plugins/statusline",
-      "description": "statusline command: zero-token Claude Code status line (session and weekly limits) that also saves the limits to ~/.claude/statusline/rate_limits.json. No skills."
+      "description": "statusline command: zero-token Claude Code status line (24 switchable styles: branch, context, session and weekly limits) that also saves the limits to ~/.claude/statusline/rate_limits.json. No skills."
     }
   ]
 }
