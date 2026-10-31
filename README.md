@@ -42,6 +42,7 @@ statusline style preview all       # draw every style on sample data (or: previe
 statusline style set tree          # save your choice
 statusline style next              # or prev, random: step through the styles
 statusline style show              # which layer wins, and why
+statusline style color gray        # grayscale mode (also: on, off)
 ```
 
 Inside Claude Code type `! statusline style set tree`: the `!` runs it in your shell without using tokens (the plugin's `bin/` is on the PATH while it is enabled; after `./skillz install` the command is also in `~/.local/bin`). The line changes at the next answer. Add `--project` to `set`, `next`, `prev`, `random`, `fit` and `alert` to write the current project's file instead of your user config.
@@ -92,9 +93,22 @@ Two optional rules sit on top of the chosen style, in the user or project file (
 
 Order of the rules: layers, then alert, then fit. A broken or unreadable config file is ignored and the default style is drawn.
 
+#### Colors, grayscale, none
+
+```sh
+statusline style color gray        # no hue: severity by brightness; also: on, off
+statusline style preview all --gray   # try a mode without saving it (or --off)
+```
+
+- `on` (default): green, yellow and red like a traffic light.
+- `gray`: no hue at all. Values go from gray to white to bold white as they grow, and a value above 85 is shown in reverse video; bars, tiles, `powerline` and `pills` use gray shades. Same text as `on`, so any style works.
+- `off`: no escape sequence at all. Styles that need background colors (`smooth`, `chips`, `pills`, `powerline`, `inbar`) draw as `brackets`.
+
+Strongest first: `NO_COLOR` set and not empty (always `off`), `STATUSLINE_COLOR=on|gray|off`, `"color"` in the project file, `"color"` in the user file. `statusline style color on` removes the key. `statusline style show` prints the mode in use.
+
 #### Details
 
-The percentages are bold and colored like a traffic light on the rounded number: green under 60, yellow 60 to 85, red above 85; with `NO_COLOR` set (not empty) no escape sequence is printed. The countdown reads `Nm` under an hour, `Hh Mm` under a day, `Dd Hh` from a day (`0m` once the reset has passed). `CTX` comes from `context_window.used_percentage` (or, without it, current usage over the window size). The `pace` style marks with a white `┃` how much of the 5-hour or 7-day window has already passed: fill left of it means you use less than time allows. The `spark` style shows the last eight readings; the plugin keeps them in `~/.claude/statusline/history.json` (a reading is added when it changes, the context history restarts with each session).
+The percentages are bold and colored like a traffic light on the rounded number: green under 60, yellow 60 to 85, red above 85; with `NO_COLOR` set (not empty) no escape sequence is printed (see above for `gray` and `off`). The countdown reads `Nm` under an hour, `Hh Mm` under a day, `Dd Hh` from a day (`0m` once the reset has passed). `CTX` comes from `context_window.used_percentage` (or, without it, current usage over the window size). The `pace` style marks with a white `┃` how much of the 5-hour or 7-day window has already passed: fill left of it means you use less than time allows. The `spark` style shows the last eight readings; the plugin keeps them in `~/.claude/statusline/history.json` (a reading is added when it changes, the context history restarts with each session).
 
 The plugin also saves the latest limits for other tools (the Agentic Control Plane app) to `~/.claude/statusline/rate_limits.json` (`CLAUDE_CONFIG_DIR` is honoured), written atomically; the file does not depend on the style:
 
